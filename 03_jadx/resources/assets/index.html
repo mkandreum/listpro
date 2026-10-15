@@ -1,0 +1,1076 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>ListPro</title>
+
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="ListPro">
+    <link rel="apple-touch-icon" href="https://i.imgur.com/mrgmvB4.png">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        :root, [data-theme="emerald"] {
+            --app-bg: #0D1A1E;
+            --brand-green: #3DDC84;
+            --brand-blue: #23A6D5;
+            --brand-orange: #F57A00;
+            --brand-red: #E61E2E;
+            --text-primary: rgba(255,255,255,0.98);
+            --text-secondary: rgba(255,255,255,0.7);
+            --text-tertiary: rgba(255,255,255,0.5);
+            --c-glass: #bbbbbc;
+            --c-light: #fff;
+            --c-dark: #000;
+            --glass-reflex-dark: 2;
+            --glass-reflex-light: 0.3;
+            --saturation: 150%;
+            --selection-glow: rgba(61, 220, 132, 0.5);
+        }
+
+        [data-theme="sunset"] {
+            --app-bg: #1a1229;
+            --brand-green: #ff7e5f;
+            --brand-blue: #8a2be2;
+            --brand-orange: #feb47b;
+            --selection-glow: rgba(255, 126, 95, 0.5);
+        }
+
+        [data-theme="ocean"] {
+            --app-bg: #0c1445;
+            --brand-green: #42e695;
+            --brand-blue: #0077be;
+            --brand-orange: #3bb2b8;
+            --selection-glow: rgba(66, 230, 149, 0.5);
+        }
+
+        [data-theme="light"] {
+            --app-bg: #f0f2f5;
+            --text-primary: #1c1e21;
+            --text-secondary: #606770;
+            --text-tertiary: #8a8d91;
+            --brand-green: #2e89ff;
+            --brand-blue: #1877f2;
+            --brand-orange: #f57a00;
+            --brand-red: #fa383e;
+            --c-glass: #444445;
+            --selection-glow: rgba(46, 137, 255, 0.5);
+        }
+
+        [data-theme="ruby"] {
+            --app-bg: #1c0a10;
+            --brand-green: #ff3131;
+            --brand-blue: #ff6347;
+            --brand-orange: #ff4500;
+            --selection-glow: rgba(255, 49, 49, 0.5);
+        }
+
+        [data-theme="amethyst"] {
+            --app-bg: #160f29;
+            --brand-green: #9d00ff;
+            --brand-blue: #00bfff;
+            --brand-orange: #ff007f;
+            --selection-glow: rgba(157, 0, 255, 0.5);
+        }
+
+        @keyframes fadeIn{from{opacity:0;transform:translateY(10px) scale(0.99)}to{opacity:1;transform:translateY(0) scale(1)}}
+        @keyframes fadeOut{from{opacity:1;transform:translateY(0) scale(1)}to{opacity:0;transform:translateY(10px) scale(0.99)}}
+        @keyframes press{0%{transform:scale(1)}50%{transform:scale(0.97)}100%{transform:scale(1)}}
+        @keyframes pop-in { 0% { transform: scale(0.9); opacity: 0.5; } 100% { transform: scale(1); opacity: 1; } }
+        @keyframes fall { 0% { transform: translateY(-10vh) rotate(0deg); opacity: 0; } 10% { opacity: 1; } 100% { transform: translateY(110vh) rotate(360deg); opacity: 1; } }
+        @keyframes toast-in { from { opacity: 0; transform: translate(-50%, 20px) scale(0.9); } to { opacity: 1; transform: translate(-50%, 0) scale(1); } }
+        @keyframes toast-out { to { opacity: 0; transform: translate(-50%, 20px) scale(0.9); } }
+        @keyframes quantity-pop { 0% { transform: scale(1); } 50% { transform: scale(1.4); } 100% { transform: scale(1); } }
+
+        *{margin:0;padding:0;box-sizing:border-box; -webkit-tap-highlight-color: transparent;}
+        html { scroll-behavior: smooth; }
+        body{font-family:'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;background:var(--app-bg);color:var(--text-primary);overflow-x:hidden; padding-top: env(safe-area-inset-top); transition: background .3s ease, color .3s ease; -ms-overflow-style: none; scrollbar-width: none;}
+        body::-webkit-scrollbar {
+         display: none;
+         }
+        .emoji-rain { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -2; overflow: hidden; pointer-events: none; filter: blur(2px); }
+        .emoji { position: absolute; font-size: 2rem; opacity: 0; animation: fall 10s linear infinite; }
+
+        .container{max-width:550px;margin:0 auto;padding:20px 16px 140px}
+
+        .glass {
+            backdrop-filter:blur(25px) saturate(var(--saturation));
+            -webkit-backdrop-filter:blur(12px) saturate(var(--saturation));
+            background-color: color-mix(in srgb, var(--c-glass) 12%, transparent);
+            border-radius:28px;
+            border: none;
+            box-shadow:
+            inset 0 0 0 1px color-mix(in srgb, var(--c-light) calc(var(--glass-reflex-light) * 10%), transparent),
+            inset 1.8px 3px 0px -2px color-mix(in srgb, var(--c-light) calc(var(--glass-reflex-light) * 90%), transparent),
+            inset -2px -2px 0px -2px color-mix(in srgb, var(--c-light) calc(var(--glass-reflex-light) * 80%), transparent),
+            inset -3px -8px 1px -6px color-mix(in srgb, var(--c-light) calc(var(--glass-reflex-light) * 60%), transparent),
+            inset -0.3px -1px 4px 0px color-mix(in srgb, var(--c-dark) calc(var(--glass-reflex-dark) * 12%), transparent),
+            inset -1.5px 2.5px 0px -2px color-mix(in srgb, var(--c-dark) calc(var(--glass-reflex-dark) * 20%), transparent),
+            inset 0px 3px 4px -2px color-mix(in srgb, var(--c-dark) calc(var(--glass-reflex-dark) * 20%), transparent),
+            inset 2px -6.5px 1px -4px color-mix(in srgb, var(--c-dark) calc(var(--glass-reflex-dark) * 10%), transparent),
+            0px 1px 5px 0px color-mix(in srgb, var(--c-dark) calc(var(--glass-reflex-dark) * 10%), transparent),
+            0px 6px 16px 0px color-mix(in srgb, var(--c-dark) calc(var(--glass-reflex-dark) * 8%), transparent);
+            transition:all .4s ease;
+        }
+        .glass:hover{
+            transform:translateY(-5px);
+            box-shadow:
+            inset 0 0 0 1.5px color-mix(in srgb, var(--c-light) calc(var(--glass-reflex-light) * 12%), transparent),
+            inset 2px 3.2px 0px -2px color-mix(in srgb, var(--c-light) calc(var(--glass-reflex-light) * 95%), transparent),
+            inset -2.2px -2.2px 0px -2px color-mix(in srgb, var(--c-light) calc(var(--glass-reflex-light) * 85%), transparent),
+            inset -3.2px -8.2px 1px -6px color-mix(in srgb, var(--c-light) calc(var(--glass-reflex-light) * 65%), transparent),
+            inset -0.3px -1px 4px 0px color-mix(in srgb, var(--c-dark) calc(var(--glass-reflex-dark) * 15%), transparent),
+            inset -1.5px 2.5px 0px -2px color-mix(in srgb, var(--c-dark) calc(var(--glass-reflex-dark) * 22%), transparent),
+            inset 0px 3px 4px -2px color-mix(in srgb, var(--c-dark) calc(var(--glass-reflex-dark) * 22%), transparent),
+            inset 2px -6.5px 1px -4px color-mix(in srgb, var(--c-dark) calc(var(--glass-reflex-dark) * 12%), transparent),
+            0px 1px 8px 0px color-mix(in srgb, var(--c-dark) calc(var(--glass-reflex-dark) * 15%), transparent),
+            0px 8px 20px 0px color-mix(in srgb, var(--c-dark) calc(var(--glass-reflex-dark) * 10%), transparent);
+        }
+
+        .header{ padding: 25px; margin-bottom: 20px; border-radius: 28px; margin-top: 20px; text-align: center; width: 100%;}
+        .header h1{ font-size: clamp(2.5rem, 10vw, 3.5rem); font-weight: 800; letter-spacing:-1.5px; margin: 0; color:var(--brand-green); text-shadow:0 0 2px rgba(0,0,0,0.5), 0 0 8px var(--brand-green), 0 0 15px var(--brand-green);}
+        .header p{color:var(--text-secondary);font-size:1.2rem; min-height: 1.2em; font-weight: 600; text-align: center; margin-top: 5px;}
+
+        .tab-bar-container{position:fixed;bottom:20px;left:0;right:0;display:flex;justify-content:center;z-index:1000;pointer-events:none; padding-bottom: env(safe-area-inset-bottom);}
+        .nav-tabs{display:flex;justify-content:space-around;align-items:center;height:70px;width:calc(100% - 40px);max-width:520px;position:relative;pointer-events:auto;padding:0 10px;border-radius:35px;}
+        .nav-indicator{position:absolute;left:0;top:-2px;height:74px;border-radius:37px;background: linear-gradient(145deg, rgba(255, 255, 255, 0.15), rgba(255, 255, 255, 0.05));border: 1px solid rgba(255, 255, 255, 0.2);box-shadow: inset 0 2px 4px rgba(0,0,0,0.3), 0 2px 3px rgba(0,0,0,0.2);transition:transform .6s cubic-bezier(.65,0,.35,1),width .6s cubic-bezier(.65,0,.35,1);z-index:1;}
+        .nav-tab{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--text-secondary);font-size:.7rem;font-weight:600;cursor:pointer;transition:all .3s ease;gap:4px;z-index:2; padding: 0 5px; position: relative;}
+        .nav-tab.active{color:var(--text-primary);font-weight:700;transform:scale(1.1)}
+        .nav-tab .icon{font-size:1.5rem;transition:transform .3s ease}
+        .nav-tab.active .icon{transform:translateY(-4px) scale(1.3)}
+        .basket-badge { position: absolute; top: -5px; right: 5px; background-color: var(--brand-orange); color: white; border-radius: 50%; width: 22px; height: 22px; font-size: 0.8rem; display: flex; justify-content: center; align-items: center; font-weight: 700; border: 2px solid var(--app-bg); transform: scale(0); transition: transform 0.3s cubic-bezier(0.18, 0.89, 0.32, 1.28); text-shadow: 0px 1px 2px rgba(0,0,0,0.3); box-shadow: inset 0 0 3px rgba(0,0,0,0.2); }
+        .basket-badge.visible { transform: scale(1); }
+
+        .content-section{display:none;}
+        .content-section.active{display:block; animation:fadeIn .4s cubic-bezier(.22,1,.36,1) forwards;}
+        .content-section.hiding{animation:fadeOut .3s cubic-bezier(.65,0,.78,0) forwards;}
+
+        .card{padding:25px;margin-bottom:20px; border-radius: 28px; opacity: 0; transform: translateY(10px); animation: fadeIn 0.5s ease forwards; }
+
+        .glass-button { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; padding: 18px; margin-top: 15px; border-radius: 20px; font-size: 1.1rem; font-weight: 700; cursor: pointer; text-align: center; color: var(--text-primary); transition: all .3s ease; }
+        .glass-button.danger { color: var(--brand-red); border-color: rgba(230, 30, 46, 0.5); }
+        .glass-button:active { animation: press 0.2s 1; }
+
+        .empty-state { text-align: center; padding: 40px 20px; }
+        .empty-state .icon { font-size: 3rem; animation: pulse-empty 2s infinite ease-in-out; }
+        .empty-state p { margin-top: 15px; font-size: 1.1rem; color: var(--text-secondary); }
+
+        .search-bar { position: sticky; top: 20px; z-index: 100; margin-bottom: 20px; }
+        .search-input { width: 100%; padding: 18px 25px 18px 60px; border-radius: 20px; border: none; font-size: 1.1rem; color: var(--text-primary); }
+        .search-icon { position: absolute; top: 50%; left: 25px; transform: translateY(-50%); font-size: 1.5rem; color: var(--text-tertiary); }
+
+        .category-card { margin-bottom: 15px; border-radius: 20px; overflow: hidden; }
+        .category-card summary { display: flex; align-items: center; gap: 15px; padding: 20px; cursor: pointer; list-style: none; transition: background-color .3s ease; }
+        .category-card summary:hover { background: rgba(255,255,255,0.05); }
+        .category-card summary::-webkit-details-marker { display: none; }
+        .category-emoji { font-size: 1.8rem; }
+        .category-info { flex-grow: 1; }
+        .category-info .name { font-size: 1.3rem; font-weight: 700; }
+        .category-info .count { font-size: 0.9rem; color: var(--text-tertiary); }
+        .category-arrow { font-size: 1.5rem; transition: transform 0.5s cubic-bezier(0.25, 1, 0.5, 1); }
+        .category-card[open] > summary .category-arrow { transform: rotate(90deg); }
+
+        /* --- ANIMATION CHANGE: Switched from max-height to CSS Grid for smoother animations --- */
+        .product-list-container {
+            display: grid;
+            grid-template-rows: 0fr; /* Collapsed by default */
+            transition: grid-template-rows 0.5s cubic-bezier(0.25, 1, 0.5, 1);
+        }
+        .category-card[open] > .product-list-container {
+            grid-template-rows: 1fr; /* Expanded to fit content */
+        }
+        .product-list-content {
+            padding: 0 20px 20px;
+            overflow: hidden; /* This is crucial for the grid animation to work correctly */
+        }
+
+        .product-item { display: grid; grid-template-columns: 50px 1fr auto; align-items: center; padding: 12px; border-radius: 22px; margin-top: 10px; gap: 15px; transition: all .3s ease; cursor: pointer; }
+        .product-item.checked { box-shadow: 0 0 15px -2px var(--selection-glow), inset 0 0 0 2px var(--selection-glow); }
+        .product-item:active { transform: scale(0.98); }
+        .product-display { font-size: 2.2rem; display: flex; justify-content: center; align-items: center; background: rgba(255, 255, 255, 0.05); border-radius: 12px; width: 50px; height: 50px; line-height: 1; overflow: hidden; }
+        .product-image { width: 100%; height: 100%; object-fit: cover; }
+        .product-info .name { font-weight: 600; }
+        .product-info .brand { font-size: 0.85rem; color: var(--text-tertiary); font-weight: 500;}
+        .product-item .price { font-weight: 700; color: var(--brand-orange); grid-column: 2; grid-row: 2; padding-left: 0; }
+
+        .quantity-controls { grid-column: 3; grid-row: 1 / span 2; display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
+        .quantity-btn { width: 32px; height: 32px; border-radius: 10px; font-size: 1.4rem; font-weight: 600; cursor: pointer; transition: all .2s ease; display: flex; align-items: center; justify-content: center; }
+        .quantity-btn.plus { color: var(--brand-green); }
+        .quantity-btn.minus { color: var(--brand-red); }
+        .quantity-btn:active { transform: scale(0.95); }
+        .quantity-display { font-size: 1.2rem; font-weight: 700; min-width: 35px; text-align: center; padding: 5px 8px; border-radius: 8px; background: rgba(0,0,0,0.15); }
+        .quantity-display.popping { animation: quantity-pop 0.3s ease; }
+
+        .cesta-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding: 0 10px; }
+        .cesta-header h2 { font-size: 1.5rem; }
+        .cesta-header .glass-button { width: auto; padding: 10px 20px; margin-top: 0; }
+        .basket-category-group { margin-bottom: 20px; }
+        .basket-category-title { font-weight: 700; color: var(--brand-green); margin-bottom: 10px; padding-left: 10px; border-left: 3px solid var(--brand-green); }
+
+        .theme-selector { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 15px; }
+        .theme-button { padding: 20px; border-radius: 22px; cursor: pointer; text-align: center; font-weight: 600; transition: all .3s ease; }
+        .theme-button.active { box-shadow: 0 0 15px var(--brand-green), inset 0 0 0 2px var(--brand-green); }
+        .theme-preview { display: flex; justify-content: center; gap: 5px; margin-top: 10px; }
+        .preview-dot { width: 20px; height: 20px; border-radius: 50%; }
+
+        .modal{ position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px); display: none; align-items:center; justify-content:center; z-index:2000; opacity:0; transition:opacity .3s ease; }
+        .modal.show{ display: flex; opacity:1; pointer-events:auto; }
+        .modal-content{width:calc(100% - 40px);max-width:480px;padding:30px;text-align:center; border-radius: 28px;}
+        .modal-buttons { display: flex; gap: 15px; margin-top: 25px; }
+        .modal-buttons .glass-button { flex: 1; width: auto; }
+
+        .cesta-actions { display: flex; flex-direction: column; gap: 10px; margin-top: 20px; }
+        .cesta-item { display: grid; grid-template-columns: 50px 1fr auto; align-items: center; padding: 12px; border-radius: 22px; margin-top: 10px; gap: 15px; }
+        .cesta-item .price { grid-column: 2; grid-row: 2; }
+
+        .custom-dropdown { position: relative; margin-bottom: 20px; }
+        .dropdown-selected { display: flex; justify-content: space-between; align-items: center; padding: 15px; border-radius: 22px; cursor: pointer; }
+        .dropdown-selected::after { content: '▼'; color: var(--text-tertiary); transition: transform 0.3s ease; }
+        .dropdown-options { display: none; position: absolute; top: 110%; left: 0; right: 0; z-index: 10; border-radius: 22px; max-height: 200px; overflow-y: auto; }
+        .dropdown-options.show { display: block; }
+        .dropdown-option { padding: 15px; cursor: pointer; }
+        .dropdown-option:hover { background: rgba(255,255,255,0.1); }
+        .custom-dropdown.open .dropdown-selected::after { transform: rotate(180deg); }
+
+        .save-basket-form { position: relative; margin-top: 20px; }
+        .save-basket-input { width: 100%; padding: 18px 130px 18px 25px; border-radius: 20px; border: none; font-size: 1.1rem; color: var(--text-primary); font-family: 'Poppins', sans-serif; }
+        .save-basket-button { position: absolute; top: 6px; right: 6px; bottom: 6px; padding: 0 25px; border-radius: 15px; width: auto; height: auto; margin: 0; font-weight: 700; cursor: pointer; color: var(--text-primary); transition: background .3s ease, transform .2s ease; }
+        .save-basket-button:active { transform: scale(0.97); }
+
+        #toast-container { position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%); z-index: 3000; display: flex; flex-direction: column; align-items: center; gap: 10px; pointer-events: none; }
+        .toast-message { padding: 12px 25px; border-radius: 30px; font-weight: 600; font-size: 1rem; animation: toast-in 0.4s cubic-bezier(.22,1,.36,1), toast-out 0.4s cubic-bezier(.65,0,.78,0) 2.6s forwards; pointer-events: all; }
+    </style>
+</head>
+<body data-theme="emerald">
+<div class="emoji-rain"></div>
+<div id="toast-container"></div>
+<div class="container">
+    <header class="glass header">
+        <h1 id="app-title">ListPro</h1>
+        <p id="header-subtitle">Tu lista de la compra inteligente</p>
+    </header>
+
+    <main>
+        <section class="content-section" id="productos"></section>
+        <section class="content-section" id="cesta"></section>
+        <section class="content-section" id="estadisticas"></section>
+        <section class="content-section" id="ajustes"></section>
+    </main>
+</div>
+
+<div class="tab-bar-container">
+    <nav class="nav-tabs glass">
+        <div class="nav-indicator"></div>
+        <div class="nav-tab" data-tab="productos"><span class="icon">🛒</span><span>Productos</span></div>
+        <div class="nav-tab" data-tab="cesta">
+            <span class="icon">🛍️</span>
+            <span>Cesta</span>
+            <span id="basket-badge" class="basket-badge">0</span>
+        </div>
+        <div class="nav-tab" data-tab="estadisticas"><span class="icon">📊</span><span>Estadísticas</span></div>
+        <div class="nav-tab" data-tab="ajustes"><span class="icon">⚙️</span><span>Ajustes</span></div>
+    </nav>
+</div>
+
+<div id="confirmation-modal" class="modal">
+    <div id="modal-content" class="glass modal-content">
+        <h3 id="modal-title">Confirmar Acción</h3>
+        <p id="modal-message" style="color:var(--text-secondary); margin-top: 10px;">¿Estás seguro?</p>
+        <div class="modal-buttons">
+            <button id="modal-cancel" class="glass-button glass">Cancelar</button>
+            <button id="modal-confirm" class="glass-button danger glass">Confirmar</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // --- DATABASE ---
+    let PRODUCT_DATA = [];
+    let productsLoaded = false;
+
+    // --- GLOBAL STATE ---
+    let currentTab = "productos";
+    let basketItems = {};
+    let savedBaskets = [];
+    let recurringItems = [];
+    let statsChart = null;
+    let isSwitchingTabs = false;
+
+    // --- INITIALIZATION ---
+    document.addEventListener("DOMContentLoaded", initApp);
+
+    function initApp(){
+        loadThemeFromLocal();
+        createEmojiRain();
+        loadAllDataFromLocal();
+
+        document.querySelectorAll(".nav-tab").forEach(tab => {
+            tab.addEventListener("click", () => switchTab(tab.dataset.tab));
+        });
+
+        const initialTab = document.querySelector('.nav-tab[data-tab="productos"]');
+        initialTab.classList.add('active');
+        updateNavIndicator(initialTab);
+        document.getElementById('productos').classList.add('active');
+        document.getElementById('header-subtitle').textContent = "Elige productos para tu cesta";
+
+        updateBasketBadge();
+        showLoadingScreen();
+    }
+
+    function showLoadingScreen() {
+        const container = document.getElementById("productos");
+        container.innerHTML = `<div class="empty-state glass card" id="loading-container"><div class="icon">⏳</div><p id="loading-message">Iniciando carga de productos...</p></div>`;
+    }
+
+    // Called by native Android code
+    function onProductsReady() {
+        loadProductsInChunks();
+    }
+
+    function loadProductsInChunks() {
+        if (typeof Android === "undefined" || typeof Android.getProductCount !== 'function') {
+            renderInitialProductView("Error: La interfaz nativa no está disponible.");
+            return;
+        }
+
+        const totalProducts = Android.getProductCount();
+        if (totalProducts === 0) {
+            productsLoaded = true;
+            renderProductos();
+            return;
+        }
+
+        let offset = 0;
+        const chunkSize = 250;
+
+        function fetchNextChunk() {
+            if (offset >= totalProducts) {
+                productsLoaded = true;
+                renderProductos();
+                return;
+            }
+
+            const jsonChunkString = Android.getProductChunk(offset, chunkSize);
+
+            try {
+                const productChunk = JSON.parse(jsonChunkString);
+                productChunk.forEach(p => {
+                    p.groupedCategory = getGroupedCategory(p.category);
+                    p.emoji = getEmojiForCategory(p.groupedCategory);
+                    if (!p.imageUrl) p.imageUrl = '';
+                });
+
+                PRODUCT_DATA.push(...productChunk);
+
+                const percentComplete = Math.round((PRODUCT_DATA.length / totalProducts) * 100);
+                const loadingMessage = document.getElementById("loading-message");
+                if (loadingMessage) {
+                    loadingMessage.textContent = `Cargando productos... ${percentComplete}%`;
+                }
+
+                offset += chunkSize;
+                setTimeout(fetchNextChunk, 0);
+
+            } catch (e) {
+                console.error("Fallo al procesar el lote JSON", e);
+                renderInitialProductView("Error al procesar los datos de los productos.");
+            }
+        }
+        fetchNextChunk();
+    }
+
+    function getGroupedCategory(originalCategory) {
+        const cat = originalCategory.toLowerCase();
+        if (['fruta'].some(k => cat.includes(k))) return 'Frutas';
+        if (['verdura', 'hortaliza', 'ensalada preparada'].some(k => cat.includes(k))) return 'Verduras y Hortalizas';
+        if (['pollo', 'pavo', 'cerdo', 'vacuno', 'cordero', 'conejo', 'hamburguesa'].some(k => cat.includes(k))) return 'Carnicería';
+        if (['pescado', 'marisco', 'atún', 'salmón', 'merluza', 'surimi', 'pulpo'].some(k => cat.includes(k))) return 'Pescadería';
+        if (['jamón', 'embutido', 'fiambre', 'paté'].some(k => cat.includes(k))) return 'Charcutería';
+        if (['leche', 'bebida vegetal'].some(k => cat.includes(k))) return 'Leche y Bebidas Vegetales';
+        if (['yogur', 'postre lácteo', 'kéfir', 'flan'].some(k => cat.includes(k))) return 'Yogures y Postres';
+        if (['queso'].some(k => cat.includes(k))) return 'Quesos';
+        if (['huevo', 'mantequilla', 'nata', 'margarina'].some(k => cat.includes(k))) return 'Huevos y Mantequillas';
+        if (['pan', 'pan de molde', 'tostadas', 'picos'].some(k => cat.includes(k))) return 'Panadería';
+        if (['bollería', 'galletas', 'pastelería', 'bizcocho'].some(k => cat.includes(k))) return 'Bollería y Galletas';
+        if (['arroz', 'pasta', 'legumbre'].some(k => cat.includes(k))) return 'Arroz, Pasta y Legumbres';
+        if (['conserva'].some(k => cat.includes(k))) return 'Conservas';
+        if (['aceite', 'vinagre', 'sal'].some(k => cat.includes(k))) return 'Aceites, Vinagre y Sal';
+        if (['salsa', 'caldo', 'especias', 'sopa', 'crema'].some(k => cat.includes(k))) return 'Salsas, Caldos y Especias';
+        if (['harina', 'azúcar', 'edulcorante', 'levadura'].some(k => cat.includes(k))) return 'Repostería';
+        if (['cereales', 'cacao', 'café', 'infusiones'].some(k => cat.includes(k))) return 'Café, Cacao y Cereales';
+        if (['patatas fritas', 'snacks', 'frutos secos', 'aceitunas', 'encurtidos'].some(k => cat.includes(k))) return 'Aperitivos';
+        if (['chocolate', 'bombones', 'turrón', 'caramelos', 'chicles'].some(k => cat.includes(k))) return 'Chocolates y Dulces';
+        if (['agua'].some(k => cat.includes(k))) return 'Agua';
+        if (['refresco', 'tónica', 'gaseosa'].some(k => cat.includes(k))) return 'Refrescos';
+        if (['zumo'].some(k => cat.includes(k))) return 'Zumos';
+        if (['cerveza', 'vino', 'licor', 'sidra'].some(k => cat.includes(k))) return 'Cervezas, Vinos y Licores';
+        if (['verdura congelada', 'plato preparado congelado'].some(k => cat.includes(k))) return 'Verduras y Platos Congelados';
+        if (['carne congelada', 'pescado congelado'].some(k => cat.includes(k))) return 'Carne y Pescado Congelado';
+        if (['helado', 'hielo'].some(k => cat.includes(k))) return 'Helados y Hielo';
+        if (['pizza', 'masa congelada'].some(k => cat.includes(k))) return 'Pizzas y Masas Congeladas';
+        if (['detergente', 'suavizante', 'quitamanchas'].some(k => cat.includes(k))) return 'Limpieza de Ropa';
+        if (['lavavajillas', 'friegasuelos', 'limpiador', 'lejía', 'amoniaco'].some(k => cat.includes(k))) return 'Limpiadores del Hogar';
+        if (['bolsa de basura', 'papel de cocina', 'papel higiénico', 'servilletas'].some(k => cat.includes(k))) return 'Bolsas y Papel';
+        if (['insecticida', 'ambientador', 'útiles de limpieza'].some(k => cat.includes(k))) return 'Otros Hogar';
+        if (['gel', 'jabón', 'desodorante'].some(k => cat.includes(k))) return 'Higiene Corporal';
+        if (['champú', 'acondicionador', 'mascarilla', 'fijación'].some(k => cat.includes(k))) return 'Cuidado del Cabello';
+        if (['pasta de dientes', 'cepillo dental', 'colutorio'].some(k => cat.includes(k))) return 'Higiene Bucal';
+        if (['crema facial', 'crema corporal', 'protector solar'].some(k => cat.includes(k))) return 'Cuidado de la Piel';
+        if (['cuchilla', 'espuma de afeitar', 'after shave'].some(k => cat.includes(k))) return 'Afeitado';
+        if (['bebé', 'infantil', 'pañales', 'toallitas', 'potito'].some(k => cat.includes(k))) return 'Bebé';
+        if (['mascota', 'perro', 'gato'].some(k => cat.includes(k))) return 'Mascotas';
+        return 'Otros';
+    }
+
+    function getEmojiForCategory(groupedCategory) {
+        const emojiMap = { 'Frutas': '🍎', 'Verduras y Hortalizas': '🥦', 'Carnicería': '🥩', 'Pescadería': '🐟', 'Charcutería': '🥓', 'Leche y Bebidas Vegetales': '🥛', 'Yogures y Postres': '🍮', 'Quesos': '🧀', 'Huevos y Mantequillas': '🥚', 'Panadería': '🥖', 'Bollería y Galletas': '🍪', 'Arroz, Pasta y Legumbres': '🍝', 'Conservas': '🥫', 'Aceites, Vinagre y Sal': '🫒', 'Salsas, Caldos y Especias': '🌶️', 'Repostería': '🍰', 'Café, Cacao y Cereales': '☕', 'Aperitivos': '🍿', 'Chocolates y Dulces': '🍫', 'Agua': '💧', 'Refrescos': '🥤', 'Zumos': '🧃', 'Cervezas, Vinos y Licores': '🍻', 'Verduras y Platos Congelados': '🧊', 'Carne y Pescado Congelado': '🥶', 'Helados y Hielo': '🍦', 'Pizzas y Masas Congeladas': '🍕', 'Limpieza de Ropa': '🧺', 'Limpiadores del Hogar': '🧹', 'Bolsas y Papel': '🧻', 'Otros Hogar': '🏠', 'Higiene Corporal': '🧼', 'Cuidado del Cabello': '🧴', 'Higiene Bucal': '🦷', 'Cuidado de la Piel': '🧴', 'Afeitado': '🪒', 'Bebé': '👶', 'Mascotas': '🐾', 'Otros': '🛒' };
+        return emojiMap[groupedCategory] || '🛒';
+    }
+
+    function switchTab(tab, isInitial = false){
+        if (isSwitchingTabs || currentTab === tab) return;
+        isSwitchingTabs = true;
+
+        const currentSection = document.getElementById(currentTab);
+        const nextSection = document.getElementById(tab);
+
+        currentTab = tab;
+        document.querySelectorAll(".nav-tab").forEach(t => t.classList.remove("active"));
+        const activeTab = document.querySelector(`.nav-tab[data-tab="${tab}"]`);
+        activeTab.classList.add("active");
+        updateNavIndicator(activeTab);
+
+        const animationDuration = isInitial ? 0 : 300;
+
+        if (currentSection) currentSection.classList.add("hiding");
+
+        setTimeout(() => {
+            if (currentSection) currentSection.classList.remove("active", "hiding");
+            nextSection.classList.add("active");
+            if (!isInitial) window.scrollTo({ top: 0, behavior: 'smooth' });
+            renderCurrentView();
+            isSwitchingTabs = false;
+        }, animationDuration);
+    }
+
+    function updateNavIndicator(activeTab) {
+        if (!activeTab) return;
+        const indicator = document.querySelector(".nav-indicator");
+        const tabRect = activeTab.getBoundingClientRect();
+        const navRect = document.querySelector(".nav-tabs").getBoundingClientRect();
+        indicator.style.width = `${tabRect.width}px`;
+        indicator.style.transform = `translateX(${tabRect.left - navRect.left}px)`;
+    }
+
+    function renderCurrentView() {
+        const subtitle = document.getElementById('header-subtitle');
+        switch(currentTab){
+            case "productos": subtitle.textContent = "Elige productos para tu cesta"; renderProductos(); break;
+            case "cesta": subtitle.textContent = "Gestiona tus cestas"; renderCesta(); break;
+            case "estadisticas": subtitle.textContent = "Análisis de tus compras"; renderEstadisticas(); break;
+            case "ajustes": subtitle.textContent = "Opciones de la aplicación"; renderAjustes(); break;
+        }
+        updateBasketBadge();
+    }
+
+    function renderInitialProductView(message = "Error de carga.") {
+        document.getElementById("productos").innerHTML = `<div class="card glass"><h3>Error</h3><p style="color: var(--text-secondary); margin-bottom: 20px;">${message}</p></div>`;
+    }
+
+    // --- PRODUCTOS SECTION ---
+    function renderProductos() {
+        const container = document.getElementById("productos");
+        if (!productsLoaded) {
+            showLoadingScreen();
+            return;
+        }
+
+        let html = `
+            <div class="search-bar">
+                <span class="search-icon">🔍</span>
+                <input type="text" id="search-input" class="glass search-input" placeholder="Buscar productos...">
+            </div>
+            <div id="category-list">
+        `;
+
+        const productsByCategory = PRODUCT_DATA.reduce((acc, product) => {
+            if (!product || !product.groupedCategory) return acc;
+            const category = product.groupedCategory;
+            if (!acc[category]) acc[category] = [];
+            acc[category].push(product);
+            return acc;
+        }, {});
+
+        const categoryOrder = Object.keys(productsByCategory).sort();
+
+        for (const category of categoryOrder) {
+            const products = productsByCategory[category];
+            html += `
+                <details class="category-card glass">
+                    <summary>
+                        <span class="category-emoji">${getEmojiForCategory(category)}</span>
+                        <div class="category-info">
+                            <div class="name">${category}</div>
+                            <div class="count">${products.length} productos</div>
+                        </div>
+                        <span class="category-arrow">›</span>
+                    </summary>
+                    <div class="product-list-container">
+                        <div class="product-list-content">
+                            ${products.map(p => renderProductItem(p)).join('')}
+                        </div>
+                    </div>
+                </details>
+            `;
+        }
+        html += `</div>`;
+        container.innerHTML = html;
+
+        document.getElementById('search-input').addEventListener('input', filterProducts);
+    }
+
+    function renderProductItem(product) {
+        const quantity = basketItems[product.id] || 0;
+        const isChecked = quantity > 0;
+
+        let imageOrEmojiHtml = product.imageUrl
+            ? `<img src="${product.imageUrl}" alt="${product.name}" class="product-image" onerror="this.parentElement.innerHTML = '${product.emoji}';">`
+            : product.emoji;
+
+        return `
+            <div class="product-item glass ${isChecked ? 'checked' : ''}" data-product-id="${product.id}" onclick="handleProductClick(event, ${product.id})">
+                <div class="product-display">${imageOrEmojiHtml}</div>
+                <div class="product-info">
+                    <div class="name">${product.name}</div>
+                    <div class="brand">${product.brand}</div>
+                </div>
+                <span class="price">${formatCurrency(product.price)}</span>
+                <div class="quantity-controls">
+                    <button class="quantity-btn minus glass" onclick="decreaseQuantity(event, ${product.id})">-</button>
+                    <span class="quantity-display">${quantity}</span>
+                    <button class="quantity-btn plus glass" onclick="increaseQuantity(event, ${product.id})">+</button>
+                </div>
+            </div>
+        `;
+    }
+
+    function handleProductClick(event, productId) {
+        if (event.target.classList.contains('quantity-btn')) {
+            return;
+        }
+        if (!basketItems[productId]) {
+            increaseQuantity(event, productId);
+        }
+    }
+
+    function increaseQuantity(event, productId) {
+        event.stopPropagation();
+        const currentQuantity = basketItems[productId] || 0;
+        basketItems[productId] = currentQuantity + 1;
+        updateProductItemUI(productId);
+        saveCurrentBasket();
+        updateBasketBadge();
+    }
+
+    function decreaseQuantity(event, productId) {
+        event.stopPropagation();
+        const currentQuantity = basketItems[productId] || 0;
+        if (currentQuantity > 0) {
+            basketItems[productId] = currentQuantity - 1;
+            if (basketItems[productId] === 0) {
+                delete basketItems[productId];
+            }
+            updateProductItemUI(productId);
+            saveCurrentBasket();
+            updateBasketBadge();
+        }
+    }
+
+    function updateProductItemUI(productId) {
+        const productItem = document.querySelector(`.product-item[data-product-id="${productId}"]`);
+        if (productItem) {
+            const quantity = basketItems[productId] || 0;
+            const quantityDisplay = productItem.querySelector('.quantity-display');
+
+            quantityDisplay.textContent = quantity;
+            quantityDisplay.classList.add('popping');
+            setTimeout(() => quantityDisplay.classList.remove('popping'), 300);
+
+            if (quantity > 0) {
+                productItem.classList.add('checked');
+            } else {
+                productItem.classList.remove('checked');
+            }
+        }
+    }
+
+    // --- CESTA SECTION ---
+    function renderCesta() {
+        const container = document.getElementById("cesta");
+        let html = '';
+        if (Object.keys(basketItems).length > 0) {
+            html += renderCurrentBasketView();
+        }
+        html += renderSavedBasketsView();
+        container.innerHTML = html;
+    }
+
+    function renderCurrentBasketView() {
+        const itemsInBasket = Object.keys(basketItems).map(id => {
+            const product = PRODUCT_DATA.find(p => p.id == id);
+            return { ...product, quantity: basketItems[id] };
+        });
+
+        const total = itemsInBasket.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+        const totalUnits = Object.values(basketItems).reduce((sum, qty) => sum + qty, 0);
+
+        const itemsByCategory = itemsInBasket.reduce((acc, item) => {
+            const category = item.groupedCategory;
+            if (!acc[category]) acc[category] = [];
+            acc[category].push(item);
+            return acc;
+        }, {});
+
+        let html = `<div class="card glass">`;
+        html += `<div class="cesta-header"><h2>Cesta Actual (${totalUnits} uds.)</h2><button class="glass-button danger glass" onclick="confirmClearBasket()">Vaciar</button></div>`;
+
+        for (const category in itemsByCategory) {
+            html += `
+                <div class="basket-category-group">
+                    <h3 class="basket-category-title">${category}</h3>
+                    ${itemsByCategory[category].map(item => {
+                        let imageOrEmojiHtml = item.imageUrl
+                            ? `<img src="${item.imageUrl}" alt="${item.name}" class="basket-item-image" onerror="this.parentElement.innerHTML = '${item.emoji}';">`
+                            : item.emoji;
+                        return `
+                            <div class="cesta-item glass">
+                                <div class="product-display">${imageOrEmojiHtml}</div>
+                                <div class="product-info">
+                                    <div class="name">${item.name}</div>
+                                    <div class="brand">${item.brand}</div>
+                                </div>
+                                <span class="price">${formatCurrency(item.price * item.quantity)}</span>
+                                <div class="quantity-controls">
+                                    <button class="quantity-btn minus glass" onclick="decreaseQuantityCesta(event, ${item.id})">-</button>
+                                    <span class="quantity-display">${item.quantity}</span>
+                                    <button class="quantity-btn plus glass" onclick="increaseQuantityCesta(event, ${item.id})">+</button>
+                                </div>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            `;
+        }
+
+        html += `
+            <div class="basket-total-summary" style="text-align:center; margin-top: 20px;">
+                <p style="color: var(--text-secondary);">Total estimado:</p>
+                <h2 style="font-size: 2.5rem; color: var(--brand-orange); margin-top: 5px;">${formatCurrency(total)}</h2>
+            </div>
+            <div class="save-basket-form">
+                 <input type="text" id="basket-name-input" class="save-basket-input glass" placeholder="Nombre para guardar la cesta...">
+                 <button class="save-basket-button glass" onclick="saveBasket()">Guardar</button>
+            </div>
+        </div>`;
+        return html;
+    }
+
+    function increaseQuantityCesta(event, productId) {
+        increaseQuantity(event, productId);
+        renderCesta();
+    }
+
+    function decreaseQuantityCesta(event, productId) {
+        decreaseQuantity(event, productId);
+        renderCesta();
+    }
+
+    function renderSavedBasketsView() {
+        let html = `<div class="card glass"><h2>Cestas Guardadas</h2>`;
+        if (savedBaskets.length > 0) {
+            savedBaskets.forEach((basket, index) => {
+                const totalUnits = Object.values(basket.items).reduce((sum, qty) => sum + qty, 0);
+                html += `
+                    <details class="category-card glass">
+                        <summary>
+                            <span class="category-emoji">🗂️</span>
+                            <div class="category-info">
+                                <div class="name">${basket.name}</div>
+                                <div class="count">${new Date(basket.date).toLocaleDateString('es-ES')} - ${totalUnits} uds. - ${formatCurrency(basket.total)}</div>
+                            </div>
+                            <span class="category-arrow">›</span>
+                        </summary>
+                        <div class="product-list-container">
+                            <div class="product-list-content">
+                                ${Object.keys(basket.items).map(productId => {
+                                    const product = PRODUCT_DATA.find(p => p.id == productId);
+                                    if (!product) return '';
+                                    return renderSavedProductItem(product, basket.items[productId]);
+                                }).join('')}
+                            </div>
+                        </div>
+                    </details>
+                `;
+            });
+        } else {
+            html += `<div class="empty-state"><p>No tienes cestas guardadas.</p></div>`;
+        }
+        if (Object.keys(basketItems).length === 0) {
+             html += `<button class="glass-button glass" onclick="switchTab('productos')">+ Empezar Nueva Cesta</button>`;
+        }
+        html += `</div>`;
+        return html;
+    }
+
+    function renderSavedProductItem(product, quantity) {
+        let imageOrEmojiHtml = product.imageUrl
+            ? `<img src="${product.imageUrl}" alt="${product.name}" class="product-image" onerror="this.parentElement.innerHTML = '${product.emoji}';">`
+            : product.emoji;
+        return `
+            <div class="product-item glass" data-product-id="${product.id}">
+                <div class="product-display">${imageOrEmojiHtml}</div>
+                <div class="product-info">
+                    <div class="name">${product.name}</div>
+                    <div class="brand">${product.brand}</div>
+                </div>
+                <span class="price">${formatCurrency(product.price)}</span>
+                <div class="quantity-controls" style="justify-content:center;">
+                    <span class="quantity-display">x${quantity}</span>
+                </div>
+            </div>
+        `;
+    }
+
+    // --- ESTADISTICAS SECTION ---
+    function renderEstadisticas() {
+        const container = document.getElementById("estadisticas");
+        const monthOptions = [...new Set(savedBaskets.map(b => new Date(b.date).toISOString().substring(0, 7)))]
+            .sort().reverse()
+            .map(month => {
+                const date = new Date(month + '-02T12:00:00Z');
+                const text = date.toLocaleString('es-ES', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+                return `<div class="dropdown-option" data-value="${month}">${text}</div>`;
+            }).join('');
+
+        const firstMonthValue = monthOptions ? new DOMParser().parseFromString(monthOptions, 'text/html').body.firstChild.dataset.value : null;
+        const firstMonthText = monthOptions ? new DOMParser().parseFromString(monthOptions, 'text/html').body.firstChild.textContent : 'No hay datos';
+
+        container.innerHTML = `
+            <div class="card glass">
+                <h3>Gasto Mensual</h3>
+                <div class="custom-dropdown" id="month-filter-dropdown">
+                    <div class="dropdown-selected glass" onclick="toggleDropdown(event, 'month-filter-dropdown')">${firstMonthText}</div>
+                    <div class="dropdown-options glass">${monthOptions}</div>
+                </div>
+                <canvas id="stats-chart"></canvas>
+            </div>
+        `;
+
+        if (monthOptions) {
+            document.querySelectorAll('#month-filter-dropdown .dropdown-option').forEach(option => {
+                option.addEventListener('click', (e) => {
+                    const value = e.currentTarget.dataset.value;
+                    const text = e.currentTarget.textContent;
+                    document.querySelector('#month-filter-dropdown .dropdown-selected').textContent = text;
+                    renderStatsChart(value);
+                    document.getElementById('month-filter-dropdown').classList.remove('open');
+                    document.querySelector('.dropdown-options').classList.remove('show');
+                });
+            });
+            renderStatsChart(firstMonthValue);
+        } else {
+            container.querySelector('canvas').outerHTML = `<div class="empty-state"><div class="icon">📊</div><p>No hay datos de cestas guardadas.</p></div>`;
+        }
+    }
+
+    function renderStatsChart(month) {
+        const selectedMonth = month || (savedBaskets.length > 0 ? new Date(savedBaskets[savedBaskets.length - 1].date).toISOString().substring(0, 7) : null);
+        if (!selectedMonth) return;
+
+        const basketsInMonth = savedBaskets.filter(b => new Date(b.date).toISOString().startsWith(selectedMonth));
+        const total = basketsInMonth.reduce((sum, b) => sum + b.total, 0);
+
+        const ctx = document.getElementById('stats-chart').getContext('2d');
+        if(statsChart) statsChart.destroy();
+
+        statsChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: [new Date(selectedMonth + '-02T12:00:00Z').toLocaleString('es-ES', { month: 'long', year: 'numeric', timeZone: 'UTC' })],
+                datasets: [{ label: 'Gasto Total (€)', data: [total], backgroundColor: 'var(--brand-green)', borderColor: 'var(--border-color)', borderWidth: 1, borderRadius: 8, }]
+            },
+            options: {
+                scales: { y: { beginAtZero: true, ticks: { color: 'var(--text-secondary)' } }, x: { ticks: { color: 'var(--text-secondary)' } } },
+                plugins: { legend: { display: false } }
+            }
+        });
+    }
+
+    // --- AJUSTES SECTION ---
+    function renderAjustes() {
+        const container = document.getElementById("ajustes");
+        const currentTheme = document.body.dataset.theme || 'emerald';
+        container.innerHTML = `
+            <div class="card glass">
+                <h3>Temas de la Aplicación</h3>
+                <div class="theme-selector">
+                    <div class="theme-button glass ${currentTheme === 'emerald' ? 'active' : ''}" onclick="switchTheme('emerald')">
+                        Esmeralda
+                        <div class="theme-preview"><span class="preview-dot" style="background: #0D1A1E;"></span><span class="preview-dot" style="background: #3DDC84;"></span><span class="preview-dot" style="background: #23A6D5;"></span></div>
+                    </div>
+                    <div class="theme-button glass ${currentTheme === 'sunset' ? 'active' : ''}" onclick="switchTheme('sunset')">
+                        Atardecer
+                        <div class="theme-preview"><span class="preview-dot" style="background: #1a1229;"></span><span class="preview-dot" style="background: #ff7e5f;"></span><span class="preview-dot" style="background: #feb47b;"></span></div>
+                    </div>
+                    <div class="theme-button glass ${currentTheme === 'ocean' ? 'active' : ''}" onclick="switchTheme('ocean')">
+                        Océano
+                        <div class="theme-preview"><span class="preview-dot" style="background: #0c1445;"></span><span class="preview-dot" style="background: #42e695;"></span><span class="preview-dot" style="background: #3bb2b8;"></span></div>
+                    </div>
+                     <div class="theme-button glass ${currentTheme === 'ruby' ? 'active' : ''}" onclick="switchTheme('ruby')">
+                        Rubí
+                        <div class="theme-preview"><span class="preview-dot" style="background: #1c0a10;"></span><span class="preview-dot" style="background: #ff3131;"></span><span class="preview-dot" style="background: #ff6347;"></span></div>
+                    </div>
+                     <div class="theme-button glass ${currentTheme === 'amethyst' ? 'active' : ''}" onclick="switchTheme('amethyst')">
+                        Amatista
+                        <div class="theme-preview"><span class="preview-dot" style="background: #160f29;"></span><span class="preview-dot" style="background: #9d00ff;"></span><span class="preview-dot" style="background: #00bfff;"></span></div>
+                    </div>
+                     <div class="theme-button glass ${currentTheme === 'light' ? 'active' : ''}" onclick="switchTheme('light')">
+                        Claro
+                        <div class="theme-preview"><span class="preview-dot" style="background: #f0f2f5;"></span><span class="preview-dot" style="background: #2e89ff;"></span><span class="preview-dot" style="background: #f57a00;"></span></div>
+                    </div>
+                </div>
+            </div>
+            <div class="card glass">
+                <h3>Gestión de Datos</h3>
+                <button class="glass-button glass" onclick="backupData()">Respaldar Datos</button>
+                <button class="glass-button glass" onclick="restoreData()">Restaurar Datos</button>
+            </div>
+        `;
+    }
+
+    function confirmClearBasket() {
+        if (Object.keys(basketItems).length === 0) {
+            showToast("La cesta ya está vacía.");
+            return;
+        }
+        showConfirmationModal('Vaciar Cesta', '¿Seguro que quieres eliminar todos los productos de la cesta actual?', () => {
+            basketItems = {};
+            saveCurrentBasket();
+            showToast("🗑️ Cesta vaciada.");
+            renderCesta();
+            if (currentTab === 'productos') renderProductos();
+            updateBasketBadge();
+        });
+    }
+
+    // --- DATA & STATE MANAGEMENT ---
+    function saveAllDataToLocal() {
+        try {
+            localStorage.setItem("listproBasket", JSON.stringify(basketItems));
+            localStorage.setItem("listproSavedBaskets", JSON.stringify(savedBaskets));
+            localStorage.setItem("listproRecurring", JSON.stringify(recurringItems));
+        } catch (e) { console.error("Failed to save data:", e); }
+    }
+
+    function saveCurrentBasket() {
+        try { localStorage.setItem("listproBasket", JSON.stringify(basketItems)); } catch (e) { console.error("Failed to save basket:", e); }
+    }
+
+    function loadAllDataFromLocal() {
+        try {
+            const current = localStorage.getItem("listproBasket");
+            if (current) basketItems = JSON.parse(current);
+
+            const saved = localStorage.getItem("listproSavedBaskets");
+            if (saved) savedBaskets = JSON.parse(saved);
+
+            const recurring = localStorage.getItem("listproRecurring");
+            if (recurring) recurringItems = JSON.parse(recurring);
+        } catch (e) {
+            console.error("Failed to load data:", e);
+            basketItems = {}; savedBaskets = []; recurringItems = [];
+        }
+    }
+
+    function switchTheme(themeName) {
+        document.body.dataset.theme = themeName;
+        try { localStorage.setItem('listproTheme', themeName); } catch (e) { console.error("Failed to save theme:", e); }
+        renderAjustes();
+    }
+
+    function loadThemeFromLocal() {
+        try {
+            const savedTheme = localStorage.getItem('listproTheme');
+            if (savedTheme) {
+                 document.body.dataset.theme = savedTheme;
+            } else {
+                 document.body.dataset.theme = 'emerald';
+            }
+        } catch (e) {
+            console.error("Failed to load theme:", e);
+            document.body.dataset.theme = 'emerald';
+        }
+    }
+
+    function saveBasket() {
+        const basketNameInput = document.getElementById('basket-name-input');
+        const basketName = basketNameInput.value.trim();
+
+        if (!basketName) { showToast("Por favor, dale un nombre a la cesta."); return; }
+        if (Object.keys(basketItems).length === 0) { showToast("La cesta está vacía."); return; }
+
+        const total = Object.keys(basketItems).reduce((sum, id) => {
+            const product = PRODUCT_DATA.find(p => p.id == id);
+            return sum + (product.price * basketItems[id]);
+        }, 0);
+
+        const newBasket = { name: basketName, date: new Date().toISOString(), total: total, items: { ...basketItems } };
+        savedBaskets.push(newBasket);
+
+        basketItems = {};
+        saveAllDataToLocal();
+        showToast(`Cesta "${basketName}" guardada.`);
+
+        renderCesta();
+        updateBasketBadge();
+        if (currentTab === 'productos') renderProductos();
+    }
+
+    function backupData() {
+        if (typeof Android !== 'undefined' && typeof Android.saveBackup === 'function') {
+            const allData = { savedBaskets: savedBaskets, recurringItems: recurringItems, theme: document.body.dataset.theme || 'emerald' };
+            Android.saveBackup(JSON.stringify(allData));
+        } else { showToast("Función de respaldo no disponible."); }
+    }
+
+    function restoreData() {
+        if (typeof Android !== 'undefined' && typeof Android.requestBackupFile === 'function') {
+            Android.requestBackupFile();
+        } else { showToast("Función de restauración no disponible."); }
+    }
+
+    function onBackupFileLoaded(jsonData) {
+        try {
+            const data = JSON.parse(jsonData);
+            if (data.savedBaskets && data.recurringItems && data.theme) {
+                savedBaskets = data.savedBaskets;
+                recurringItems = data.recurringItems;
+                switchTheme(data.theme);
+                saveAllDataToLocal();
+                showToast("✅ Datos restaurados con éxito.");
+                renderCurrentView();
+            } else { showToast("❌ Archivo de respaldo inválido."); }
+        } catch (e) { showToast("❌ Error al leer el archivo de respaldo."); console.error("Error parsing backup JSON:", e); }
+    }
+
+    // --- UTILS ---
+    function filterProducts() {
+        const searchTerm = document.getElementById('search-input').value.toLowerCase();
+        document.querySelectorAll('.category-card').forEach(categoryCard => {
+            let hasVisibleProducts = false;
+            categoryCard.querySelectorAll('.product-item').forEach(productItem => {
+                const name = productItem.querySelector('.name').textContent.toLowerCase();
+                const brand = productItem.querySelector('.brand').textContent.toLowerCase();
+                if (name.includes(searchTerm) || brand.includes(searchTerm)) {
+                    productItem.style.display = 'grid';
+                    hasVisibleProducts = true;
+                } else { productItem.style.display = 'none'; }
+            });
+            if (hasVisibleProducts) {
+                categoryCard.style.display = 'block';
+                if(searchTerm.length > 1 && !categoryCard.hasAttribute('open')) { categoryCard.setAttribute('open', ''); }
+            } else { categoryCard.style.display = 'none'; }
+        });
+    }
+
+    function createEmojiRain() {
+        const container = document.querySelector('.emoji-rain');
+        const foodEmojis = ['🍎', '🍌', '🍇', '🍓', '🍑', '🍍', '🥝', '🥦', '🍆', '🥕', '🌽', '🌶️', '🍞', '🧀', '🍗', '🥩', '🍔', '🍟', '🍕'];
+        for (let i = 0; i < 15; i++) {
+            const emoji = document.createElement('div');
+            emoji.classList.add('emoji');
+            emoji.textContent = foodEmojis[Math.floor(Math.random() * foodEmojis.length)];
+            emoji.style.left = `${Math.random() * 100}vw`;
+            emoji.style.animationDuration = `${Math.random() * 5 + 5}s`;
+            emoji.style.animationDelay = `${Math.random() * 5}s`;
+            container.appendChild(emoji);
+        }
+        document.getElementById('app-title').textContent = '🍏 ListPro';
+    }
+
+    function formatCurrency(value) {
+        if (value === null || value === undefined) return "€0,00";
+        return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(value);
+    }
+
+    function showToast(message){
+        const toastContainer = document.getElementById("toast-container");
+        if (!toastContainer) return;
+        const toast = document.createElement('div');
+        toast.textContent = message;
+        toast.className = 'toast-message glass';
+        toastContainer.appendChild(toast);
+        setTimeout(() => { toast.remove(); }, 3000);
+    }
+
+    function updateBasketBadge() {
+        const badge = document.getElementById('basket-badge');
+        const count = Object.values(basketItems).reduce((sum, qty) => sum + qty, 0);
+        if (count > 0) {
+            badge.textContent = count;
+            badge.classList.add('visible');
+        } else {
+            badge.classList.remove('visible');
+        }
+    }
+
+    function showConfirmationModal(title, message, onConfirm) {
+        const modal = document.getElementById('confirmation-modal');
+        document.getElementById('modal-title').textContent = title;
+        document.getElementById('modal-message').innerHTML = message;
+
+        const confirmBtn = document.getElementById('modal-confirm');
+        const cancelBtn = document.getElementById('modal-cancel');
+
+        const confirmHandler = () => { onConfirm(); closeModal(); };
+        const cancelHandler = () => { closeModal(); };
+
+        const newConfirmBtn = confirmBtn.cloneNode(true);
+        confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+        newConfirmBtn.addEventListener('click', confirmHandler);
+
+        const newCancelBtn = cancelBtn.cloneNode(true);
+        cancelBtn.parentNode.replaceChild(newCancelBtn, cancelBtn);
+        newCancelBtn.addEventListener('click', cancelHandler);
+
+        const closeModal = () => { modal.classList.remove('show'); };
+        modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); }, { once: true });
+        modal.classList.add('show');
+    }
+
+    function toggleDropdown(event, dropdownId) {
+        event.stopPropagation();
+        const dropdown = document.getElementById(dropdownId);
+        const options = dropdown.querySelector('.dropdown-options');
+        const isOpen = dropdown.classList.toggle('open');
+        options.classList.toggle('show', isOpen);
+    }
+
+    document.addEventListener('click', (e) => {
+        document.querySelectorAll('.custom-dropdown.open').forEach(dropdown => {
+            if (!dropdown.contains(e.target)) {
+                dropdown.classList.remove('open');
+                dropdown.querySelector('.dropdown-options').classList.remove('show');
+            }
+        });
+    });
+</script>
+</body>
+</html>
