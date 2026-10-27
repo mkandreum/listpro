@@ -49,7 +49,7 @@ export function Results({ mode, q = '', onOpen }: { mode: 'search' | 'down' | 'n
   return (
     <>
       <div className="row-head" style={{ marginTop: 6 }}>
-        <h1 className="h-section">{mode !== 'search' && <Icon size={30} strokeWidth={3} style={{ verticalAlign: '-3px', marginRight: 8 }} />}{title}</h1>
+        <h1 className="h-section">{mode !== 'search' && <span className="h-icon" style={mode === 'new' ? { background: 'var(--violet)' } : undefined}><Icon size={22} strokeWidth={2.4} /></span>}{title}</h1>
         <span className="stamp num">{list.length}</span>
       </div>
 

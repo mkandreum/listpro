@@ -31,6 +31,8 @@ data class Section(
     val name: String,
     val emoji: String = "🛒",
     val hue: String = "#B9BCC4",
+    val icon: String = "bag",
+    val blurb: String = "",
     val count: Int = 0,
     val images: List<String> = emptyList(),
     val categories: List<Category> = emptyList(),

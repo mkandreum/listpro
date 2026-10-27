@@ -44,7 +44,7 @@ Catálogo real de Mercadona (≈4.300 productos, ~150 subcategorías) con precio
 ## Brand Commitments
 
 - Nombre: ListPro, de Xyon Platforms. Idioma: español de España, tono cercano y directo.
-- Binding visual pedido por el usuario: neo-brutalismo mezclado con glassmorphism.
+- Dirección visual elegida por el usuario (28/10/2026): la de su maqueta — fondo verde muy oscuro / claro, verde de marca con brillo, tarjetas suaves, cristal en lo flotante, varias tipografías. Sustituye al neo-brutalismo anterior.
 - No usar logotipo ni colores corporativos de Mercadona como identidad propia.
 
 ## Evidence on Hand

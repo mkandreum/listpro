@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { BarChart3, Search, Settings, ShoppingBasket, Store, X } from 'lucide-react';
+import { BarChart3, Clock3, Search, Settings, ShoppingBasket, SlidersHorizontal, Store, X } from 'lucide-react';
 import { freshnessLabel, units } from '../lib';
 import { href, navigate, type Route } from '../router';
 import { useStore } from '../store';
@@ -8,11 +8,14 @@ export function TopBar() {
   const updatedAt = useStore((s) => s.catalog?.updatedAt);
   return (
     <header className="topbar">
-      <a href="#/" className="wordmark" style={{ textDecoration: 'none' }} aria-label="ListPro, inicio">
-        <span className="wordmark-mark"><ShoppingBasket size={22} strokeWidth={2.75} /></span>
-        ListPro
+      <a href="#/" className="brand" aria-label="ListPro, inicio">
+        <span className="brand-mark"><ShoppingBasket size={28} strokeWidth={2.2} /></span>
+        <span>
+          <span className="wordmark">List<em>Pro</em></span>
+          <span className="tagline">Tu súper, en un clic</span>
+        </span>
       </a>
-      {updatedAt && <span className="stamp num"><span className="pulse" />{freshnessLabel(updatedAt)}</span>}
+      {updatedAt && <span className="stamp num"><span className="pulse" />{freshnessLabel(updatedAt)}<Clock3 size={15} strokeWidth={2.4} /></span>}
     </header>
   );
 }
@@ -32,7 +35,7 @@ export function SearchBar({ value = '', autoFocus = false }: { value?: string; a
   return (
     <div className="searchbar" role="search">
       <label className="search glass">
-        <Search size={22} strokeWidth={2.5} aria-hidden />
+        <Search size={22} strokeWidth={2.2} aria-hidden />
         <span className="sr-only">Buscar productos</span>
         <input
           ref={ref}
@@ -43,7 +46,9 @@ export function SearchBar({ value = '', autoFocus = false }: { value?: string; a
           autoComplete="off"
           enterKeyHint="search"
         />
-        {q && <button type="button" className="icon-btn" onClick={() => { update(''); ref.current?.focus(); }} aria-label="Borrar búsqueda"><X size={20} /></button>}
+        {q
+          ? <button type="button" className="icon-btn" onClick={() => { update(''); ref.current?.focus(); }} aria-label="Borrar búsqueda"><X size={20} /></button>
+          : <button type="button" className="icon-btn" onClick={() => navigate({ name: 'deals', kind: 'down' })} aria-label="Ver bajadas de precio con filtros"><SlidersHorizontal size={20} /></button>}
       </label>
     </div>
   );
@@ -76,7 +81,7 @@ export function NavBar({ current }: { current: Route['name'] }) {
       <span className="nav-pill" aria-hidden />
       {TABS.map(({ route, label, icon: Icon, match }) => (
         <a key={label} href={href(route)} className="nav-item" style={{ textDecoration: 'none' }} aria-current={match.includes(current) ? 'page' : undefined}>
-          <Icon size={24} strokeWidth={2.4} aria-hidden />
+          <Icon size={23} strokeWidth={2.2} aria-hidden />
           {label}
           {route.name === 'basket' && count > 0 && (
             <span ref={badgeRef} className="badge num" aria-label={`${count} unidades`}>{count > 99 ? '99+' : count}</span>

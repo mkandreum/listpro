@@ -58,7 +58,7 @@ import com.listpro.xyon.pro.ui.Route
 import com.listpro.xyon.pro.ui.SettingsScreen
 import com.listpro.xyon.pro.ui.StatsScreen
 import com.listpro.xyon.pro.ui.Tab
-import com.listpro.xyon.pro.ui.brutal
+import com.listpro.xyon.pro.ui.card
 import com.listpro.xyon.pro.ui.tab
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -202,7 +202,7 @@ private fun App(vm: AppViewModel, nfcAvailable: Boolean) {
 
         SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 100.dp)) { data ->
             Snackbar(
-                Modifier.padding(horizontal = 16.dp).brutal(c.ink, c.line, c.shadow, radius = 16.dp, lift = 3.dp),
+                Modifier.padding(horizontal = 16.dp).card(c.ink, c.line, radius = 16.dp),
                 containerColor = c.ink, contentColor = c.ground,
             ) { Text(data.visuals.message) }
         }

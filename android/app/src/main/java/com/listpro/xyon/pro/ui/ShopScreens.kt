@@ -45,6 +45,30 @@ import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.SearchOff
 import androidx.compose.material.icons.rounded.ShoppingBasket
 import androidx.compose.material.icons.rounded.WifiOff
+import androidx.compose.material.icons.rounded.AcUnit
+import androidx.compose.material.icons.rounded.ArrowDownward
+import androidx.compose.material.icons.rounded.BakeryDining
+import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.ChildCare
+import androidx.compose.material.icons.rounded.CleaningServices
+import androidx.compose.material.icons.rounded.Eco
+import androidx.compose.material.icons.rounded.LocalDrink
+import androidx.compose.material.icons.rounded.Pets
+import androidx.compose.material.icons.rounded.Schedule
+import androidx.compose.material.icons.rounded.ShoppingBag
+import androidx.compose.material.icons.rounded.Spa
+import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material.icons.rounded.WineBar
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.sp
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -97,24 +121,46 @@ fun freshness(iso: String?): String {
     }
 }
 
+/** Icono de cada pasillo: el nombre llega de la API para que web y Android usen el mismo. */
+fun sectionIcon(name: String): ImageVector = when (name) {
+    "leaf" -> Icons.Rounded.Eco
+    "milk" -> Icons.Rounded.LocalDrink
+    "wheat" -> Icons.Rounded.BakeryDining
+    "snowflake" -> Icons.Rounded.AcUnit
+    "wine" -> Icons.Rounded.WineBar
+    "sparkles" -> Icons.Rounded.Spa
+    "spray" -> Icons.Rounded.CleaningServices
+    "baby" -> Icons.Rounded.ChildCare
+    "paw" -> Icons.Rounded.Pets
+    else -> Icons.Rounded.ShoppingBag
+}
+
 @Composable
 fun TopBar(updatedAt: String?) {
     val c = LocalColors.current
     Row(
-        Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 12.dp),
+        Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Box(Modifier.size(38.dp).rotate(-6f).brutal(c.lime, c.line, c.shadow, radius = 12.dp, lift = 3.dp), contentAlignment = Alignment.Center) {
-                Icon(Icons.Rounded.ShoppingBasket, null, tint = c.onLime, modifier = Modifier.size(22.dp))
+        Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Box(
+                Modifier.size(50.dp).shadow(10.dp, RoundedCornerShape(16.dp), ambientColor = c.greenHi, spotColor = c.greenHi)
+                    .clip(RoundedCornerShape(16.dp)).background(c.gradient),
+                contentAlignment = Alignment.Center,
+            ) { Icon(Icons.Rounded.ShoppingBasket, null, tint = Color.White, modifier = Modifier.size(28.dp)) }
+            Column {
+                Text(
+                    buildAnnotatedString { append("List"); withStyle(SpanStyle(color = c.greenHi)) { append("Pro") } },
+                    style = MaterialTheme.typography.headlineLarge.copy(fontSize = 30.sp, lineHeight = 30.sp), color = c.ink,
+                    modifier = Modifier.semantics { heading() },
+                )
+                Text("Tu súper, en un clic", style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium), color = c.ink2)
             }
-            Text("ListPro", style = MaterialTheme.typography.headlineLarge, color = c.ink, modifier = Modifier.semantics { heading() })
         }
-        if (updatedAt != null) Stamp(freshness(updatedAt), dot = c.down)
+        if (updatedAt != null) Stamp(freshness(updatedAt), dot = c.greenHi, trailing = Icons.Rounded.Schedule)
     }
 }
-
 
 /** Buscador de cristal. En Inicio solo abre la búsqueda; en Búsqueda escribe. */
 @Composable
@@ -131,8 +177,8 @@ fun SearchField(
     Row(
         modifier
             .fillMaxWidth()
-            .height(58.dp)
-            .brutal(c.glass, c.line, c.shadow, radius = Brutal.radius, stroke = Brutal.thin)
+            .height(60.dp)
+            .raised(22.dp, c.glass)
             .padding(start = if (onBack != null) 4.dp else 18.dp, end = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -142,43 +188,70 @@ fun SearchField(
                 Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Volver", tint = c.ink)
             }
         } else {
-            Icon(Icons.Rounded.Search, null, tint = c.ink)
+            Icon(Icons.Rounded.Search, null, tint = c.ink2)
         }
         Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
-            if (value.isEmpty()) Text("Busca leche, aguacate, detergente…", color = c.ink2, style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (value.isEmpty()) Text("Busca leche, aguacate, detergente…", color = c.ink3, style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium), maxLines = 1, overflow = TextOverflow.Ellipsis)
             BasicTextField(
                 value = value,
                 onValueChange = onValueChange,
                 singleLine = true,
-                textStyle = MaterialTheme.typography.bodyLarge.copy(color = c.ink),
-                cursorBrush = SolidColor(c.ink),
+                textStyle = MaterialTheme.typography.bodyLarge.copy(color = c.ink, fontWeight = FontWeight.Medium),
+                cursorBrush = SolidColor(c.green),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                 modifier = Modifier.fillMaxWidth().focusRequester(focus),
             )
         }
         if (value.isNotEmpty()) {
             Box(Modifier.size(48.dp).clip(CircleShape).clickable(onClickLabel = "Borrar búsqueda") { onValueChange("") }, contentAlignment = Alignment.Center) {
-                Icon(Icons.Rounded.Close, "Borrar búsqueda", tint = c.ink)
+                Icon(Icons.Rounded.Close, "Borrar búsqueda", tint = c.ink2)
             }
         }
     }
 }
 
 @Composable
-private fun SearchLauncher(onClick: () -> Unit) {
+private fun SearchLauncher(onClick: () -> Unit, onFilters: () -> Unit) {
     val c = LocalColors.current
     Row(
         Modifier
             .fillMaxWidth()
-            .height(58.dp)
-            .brutal(c.glass, c.line, c.shadow, stroke = Brutal.thin)
+            .height(60.dp)
+            .raised(22.dp, c.glass)
             .clickable(role = Role.Button, onClickLabel = "Buscar productos", onClick = onClick)
-            .padding(horizontal = 18.dp),
+            .padding(start = 18.dp, end = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Icon(Icons.Rounded.Search, null, tint = c.ink)
-        Text("Busca leche, aguacate, detergente…", color = c.ink2, style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium), maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Icon(Icons.Rounded.Search, null, tint = c.ink2)
+        Text("Busca leche, aguacate, detergente…", color = c.ink3, style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+        Box(Modifier.size(48.dp).clip(RoundedCornerShape(14.dp)).clickable(onClickLabel = "Ver bajadas con filtros", onClick = onFilters), contentAlignment = Alignment.Center) {
+            Icon(Icons.Rounded.Tune, "Filtros", tint = c.ink2)
+        }
+    }
+}
+
+/** Acceso rápido: icono en su baldosa de color, título y cifra. */
+@Composable
+private fun StatCard(icon: ImageVector, tint: Color, title: String, value: String, valueColor: Color, onClick: () -> Unit) {
+    val c = LocalColors.current
+    Row(
+        Modifier
+            .width(164.dp)
+            .heightIn(min = 72.dp)
+            .raised(Ui.radius)
+            .clickable(role = Role.Button, onClick = onClick)
+            .padding(start = 12.dp, end = 14.dp, top = 12.dp, bottom = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Box(Modifier.size(44.dp).clip(RoundedCornerShape(14.dp)).background(tint.copy(alpha = 0.15f)), contentAlignment = Alignment.Center) {
+            Icon(icon, null, tint = tint, modifier = Modifier.size(24.dp))
+        }
+        Column {
+            Text(title, style = MaterialTheme.typography.bodyMedium, color = c.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(value, style = TextStyle(fontFamily = Numeric, fontWeight = FontWeight.Bold, fontSize = 18.sp), color = valueColor)
+        }
     }
 }
 
@@ -208,7 +281,7 @@ fun HomeScreen(
         }
         stickyHeader(key = "search") {
             Box(Modifier.then(if (searchPinned) Modifier.windowInsetsPadding(WindowInsets.statusBars) else Modifier).padding(horizontal = Gutter).padding(top = 4.dp, bottom = 14.dp)) {
-                SearchLauncher { onOpen(Route.Search("")) }
+                SearchLauncher(onClick = { onOpen(Route.Search("")) }, onFilters = { onOpen(Route.Deals(false)) })
             }
         }
         if (idx == null) {
@@ -216,11 +289,11 @@ fun HomeScreen(
                 Box(Modifier.padding(horizontal = Gutter)) {
                     if (error) {
                         EmptyState(Icons.Rounded.WifiOff, "No llegan los precios", "Revisa la conexión. En cuanto vuelva, cargamos el catálogo.") {
-                            BrutalButton("Reintentar", onRetry, primary = true)
+                            AppButton("Reintentar", onRetry, primary = true)
                         }
                     } else {
                         Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                            repeat(3) { Box(Modifier.fillMaxWidth().height(160.dp).clip(RoundedCornerShape(Brutal.radius)).background(c.surface2)) }
+                            repeat(3) { Box(Modifier.fillMaxWidth().height(160.dp).clip(RoundedCornerShape(Ui.radius)).background(c.surface2)) }
                         }
                     }
                 }
@@ -228,27 +301,18 @@ fun HomeScreen(
             return@LazyColumn
         }
 
-        item(key = "chips") {
-            LazyRow(contentPadding = PaddingValues(horizontal = Gutter), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        item(key = "stats") {
+            LazyRow(contentPadding = PaddingValues(start = Gutter, end = Gutter, bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 if (idx.deals.isNotEmpty()) item {
-                    Chip(false, { onOpen(Route.Deals(false)) }) {
-                        Icon(Icons.AutoMirrored.Rounded.TrendingDown, null, Modifier.size(18.dp))
-                        Text("Bajadas ${idx.deals.size}", style = MaterialTheme.typography.labelLarge)
-                    }
+                    StatCard(Icons.AutoMirrored.Rounded.TrendingDown, c.green, "Bajadas", "${idx.deals.size}", c.greenInk) { onOpen(Route.Deals(false)) }
                 }
                 if (idx.newProducts.isNotEmpty()) item {
-                    Chip(false, { onOpen(Route.Deals(true)) }) {
-                        Icon(Icons.Rounded.AutoAwesome, null, Modifier.size(18.dp))
-                        Text("Novedades ${idx.newProducts.size}", style = MaterialTheme.typography.labelLarge)
-                    }
+                    StatCard(Icons.Rounded.AutoAwesome, c.violet, "Novedades", "${idx.newProducts.size}", c.violet) { onOpen(Route.Deals(true)) }
                 }
-                itemsIndexed(idx.catalog.sections) { i, s ->
-                    Chip(false, {
-                        // salto al pasillo: cabecera, buscador, chips, bajadas y luego un item por pasillo
-                        scope.launch { list.animateScrollToItem(4 + i) }
-                    }, leading = { HueDot(hueColor(s.hue)) }) {
-                        Text(s.name, style = MaterialTheme.typography.labelLarge)
-                    }
+                items(idx.catalog.sections.size) { i ->
+                    val s = idx.catalog.sections[i]
+                    // salto al pasillo: cabecera, buscador, accesos, bajadas y luego un item por pasillo
+                    StatCard(sectionIcon(s.icon), hueColor(s.hue), s.name, "${s.count}", c.ink2) { scope.launch { list.animateScrollToItem(4 + i) } }
                 }
             }
         }
@@ -257,19 +321,20 @@ fun HomeScreen(
             if (idx.deals.isNotEmpty()) {
                 Column {
                     Row(
-                        Modifier.fillMaxWidth().padding(horizontal = Gutter).padding(top = 26.dp, bottom = 12.dp),
+                        Modifier.fillMaxWidth().padding(horizontal = Gutter).padding(top = 24.dp, bottom = 14.dp),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                        Text("Han bajado", style = MaterialTheme.typography.headlineLarge, color = c.ink, modifier = Modifier.semantics { heading() })
-                        BrutalButton("Ver ${idx.deals.size}", { onOpen(Route.Deals(false)) })
+                        IconBadge(Icons.Rounded.ArrowDownward, c.green, size = 44.dp)
+                        Text("Han bajado", style = MaterialTheme.typography.headlineLarge, color = c.ink, maxLines = 1, modifier = Modifier.weight(1f).semantics { heading() })
+                        AppButton("Ver ${idx.deals.size}", { onOpen(Route.Deals(false)) }, ghost = true, leading = null)
                     }
                     LazyRow(contentPadding = PaddingValues(start = Gutter, end = Gutter, bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                         items(idx.deals.take(14), key = { it.id }) { p ->
                             ProductTag(
                                 p, basket[p.id] ?: 0, idx.subcategories[p.subcategory]?.emoji ?: "🛒",
                                 onQty = { onQty(p.id, it) }, onOpen = { onProduct(p) },
-                                modifier = Modifier.width(180.dp),
+                                modifier = Modifier.width(186.dp),
                             )
                         }
                     }
@@ -277,77 +342,88 @@ fun HomeScreen(
             }
         }
 
-        items(idx.catalog.sections, key = { "aisle-${it.id}" }) { s -> Aisle(s) { onOpen(Route.CategoryRoute(it)) } }
+        items(idx.catalog.sections, key = { "aisle-${it.id}" }) { s -> Aisle(s, onSection = { s.categories.firstOrNull()?.let { onOpen(Route.CategoryRoute(it.id)) } }) { onOpen(Route.CategoryRoute(it)) } }
     }
 }
 
-private fun <T> androidx.compose.foundation.lazy.LazyListScope.itemsIndexed(list: List<T>, content: @Composable (Int, T) -> Unit) {
-    items(list.size) { i -> content(i, list[i]) }
-}
-
-/** Un pasillo pintado de borde a borde con su color, y sus categorías como fichas con pegatinas. */
+/** Banner del pasillo con su color, icono, descripción y fotos, y debajo sus categorías. */
 @Composable
-private fun Aisle(s: Section, onCategory: (Int) -> Unit) {
-    val c = LocalColors.current
+private fun Aisle(s: Section, onSection: () -> Unit, onCategory: (Int) -> Unit) {
     val hue = hueColor(s.hue)
-    val onHue = hue.ink()
-    val biggest = s.categories.maxByOrNull { it.count }
-    Column(
-        Modifier
-            .padding(top = 26.dp)
-            .fillMaxWidth()
-            .background(hue)
-            .border(Brutal.stroke, c.line)
-            .padding(horizontal = Gutter, vertical = 22.dp),
-    ) {
-        Row(Modifier.fillMaxWidth().padding(bottom = 16.dp), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(s.name, style = MaterialTheme.typography.headlineLarge, color = onHue, modifier = Modifier.weight(1f).semantics { heading() })
-            Stamp("${s.count}")
-        }
-        // Mosaico: la categoría más grande ocupa dos columnas si el pasillo tiene más de dos.
-        val wide = biggest.takeIf { s.categories.size > 2 }
-        val rest = s.categories.filter { it != wide }
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            val firstRows = rest.chunked(2)
-            val insertAt = (firstRows.size / 2).coerceAtLeast(0)
-            firstRows.forEachIndexed { i, row ->
-                if (wide != null && i == insertAt) CategoryCard(wide, true, Modifier.fillMaxWidth()) { onCategory(wide.id) }
-                Row(Modifier.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    row.forEach { cat -> CategoryCard(cat, false, Modifier.weight(1f).fillMaxHeight()) { onCategory(cat.id) } }
-                    if (row.size == 1) Spacer(Modifier.weight(1f))
-                }
-            }
-            if (wide != null && insertAt >= firstRows.size) CategoryCard(wide, true, Modifier.fillMaxWidth()) { onCategory(wide.id) }
+    Column(Modifier.padding(top = 28.dp)) {
+        SectionBanner(s.name, s.blurb, sectionIcon(s.icon), hue, s.images, Modifier.padding(horizontal = Gutter), count = s.count, onCount = onSection)
+        LazyRow(contentPadding = PaddingValues(start = Gutter, end = Gutter, top = 10.dp, bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            items(s.categories, key = { it.id }) { cat -> CategoryTile(cat, hue) { onCategory(cat.id) } }
         }
     }
 }
 
 @Composable
-private fun CategoryCard(cat: Category, wide: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
+fun SectionBanner(
+    title: String,
+    body: String?,
+    icon: ImageVector,
+    hue: Color,
+    images: List<String>,
+    modifier: Modifier = Modifier,
+    count: Int? = null,
+    onCount: (() -> Unit)? = null,
+    top: (@Composable () -> Unit)? = null,
+    titleStyle: TextStyle = MaterialTheme.typography.headlineLarge.copy(fontSize = 29.sp, lineHeight = 30.sp),
+) {
     val c = LocalColors.current
+    val shape = RoundedCornerShape(Ui.radiusL)
     Box(
         modifier
-            .heightIn(min = if (wide) 168.dp else 150.dp)
-            .brutal(c.surface, c.line, c.shadow)
-            .clickable(role = Role.Button, onClickLabel = "Abrir ${cat.name}", onClick = onClick)
-            .padding(14.dp),
+            .fillMaxWidth()
+            .heightIn(min = 150.dp)
+            .clip(shape)
+            .background(Brush.horizontalGradient(listOf(hue.copy(alpha = if (c.isDark) 0.16f else 0.14f).compositeOver(c.surface), hue.copy(alpha = if (c.isDark) 0.34f else 0.30f).compositeOver(c.surface))))
+            .border(Ui.hairline, hue.copy(alpha = 0.4f), shape)
+            .padding(18.dp),
     ) {
-        Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.SpaceBetween) {
-          Column {
-            Text(
-                cat.name,
-                style = if (wide) MaterialTheme.typography.headlineMedium else MaterialTheme.typography.titleMedium,
-                color = c.ink,
-                modifier = Modifier.padding(end = 36.dp),
-            )
-            Text("${cat.count} productos · ${cat.subcategories.size} secciones", style = MaterialTheme.typography.labelSmall, color = c.ink2, modifier = Modifier.padding(top = 4.dp))
-          }
-            Stickers(cat.images, Modifier.padding(top = 12.dp), size = if (wide) 76.dp else 58.dp)
+        // Las fotos van ancladas abajo a la derecha para que el título use todo el ancho y no se parta.
+        Stickers(images, Modifier.align(Alignment.BottomEnd), size = 54.dp)
+        Column(Modifier.fillMaxWidth()) {
+            top?.invoke()
+            Row(Modifier.padding(end = if (count != null) 72.dp else 0.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                IconBadge(icon, hue, size = 44.dp)
+                Text(title, style = titleStyle, color = c.ink, modifier = Modifier.semantics { heading() })
+            }
+            body?.let { Text(it, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium, fontSize = 15.sp, lineHeight = 20.sp), color = c.ink2, modifier = Modifier.padding(top = 10.dp, end = 118.dp)) }
         }
+        if (count != null) {
+            Row(
+                Modifier.align(Alignment.TopEnd).clip(CircleShape).background(c.glass).border(Ui.hairline, c.line, CircleShape)
+                    .then(if (onCount != null) Modifier.clickable(onClick = onCount) else Modifier).padding(start = 12.dp, end = 6.dp, top = 5.dp, bottom = 5.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("$count", style = TextStyle(fontFamily = Numeric, fontWeight = FontWeight.SemiBold, fontSize = 14.sp), color = c.ink)
+                Icon(Icons.Rounded.ChevronRight, null, tint = c.ink2, modifier = Modifier.size(18.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun CategoryTile(cat: Category, hue: Color, onClick: () -> Unit) {
+    val c = LocalColors.current
+    Column(
+        Modifier
+            .width(146.dp)
+            .raised(Ui.radius)
+            .clickable(role = Role.Button, onClickLabel = "Abrir ${cat.name}", onClick = onClick)
+            .padding(8.dp),
+    ) {
         Box(
-            Modifier.align(Alignment.TopEnd).size(32.dp).clip(CircleShape).background(c.ink),
-            contentAlignment = Alignment.Center,
-        ) { Icon(Icons.Rounded.NorthEast, null, tint = c.ground, modifier = Modifier.size(18.dp)) }
+            Modifier.fillMaxWidth().height(86.dp).clip(RoundedCornerShape(14.dp)).background(hue.copy(alpha = 0.14f).compositeOver(c.surface2)),
+            contentAlignment = Alignment.BottomCenter,
+        ) { Stickers(cat.images, Modifier.padding(bottom = 8.dp), size = 54.dp) }
+        Row(Modifier.padding(start = 4.dp, end = 2.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(cat.name, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold), color = c.ink, maxLines = 2, minLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            Icon(Icons.Rounded.ChevronRight, null, tint = c.ink3, modifier = Modifier.size(18.dp))
+        }
+        Text("${cat.count} productos", style = TextStyle(fontFamily = Numeric, fontSize = 11.sp), color = c.ink3, modifier = Modifier.padding(start = 4.dp, bottom = 2.dp))
     }
 }
 
@@ -365,7 +441,6 @@ fun CategoryScreen(
     val c = LocalColors.current
     val (cat, section) = idx.categories[id] ?: return EmptyState(Icons.Rounded.SearchOff, "Esta categoría ya no existe", "Vuelve a los pasillos.", Modifier.padding(Gutter))
     val hue = hueColor(section.hue)
-    val onHue = hue.ink()
     val products = idx.byCategory[id].orEmpty()
     val bySub = remember(products) { products.groupBy { it.subcategory } }
     val cheapest = remember(products) { products.minByOrNull { it.price } }
@@ -405,7 +480,7 @@ fun CategoryScreen(
             modifier = Modifier
                 .padding(top = 12.dp)
                 .fillMaxWidth()
-                .brutal(c.glass, c.line, c.shadow, stroke = Brutal.thin)
+                .raised(22.dp, c.glass)
                 .padding(vertical = 8.dp),
             contentPadding = PaddingValues(horizontal = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -415,7 +490,7 @@ fun CategoryScreen(
                     selected = s.id == active,
                     onClick = { scope.launch { grid.animateScrollToItem(subStart[s.id] ?: 0) } },
                     leading = s.image?.let { url ->
-                        { Box(Modifier.size(32.dp).clip(CircleShape).background(androidx.compose.ui.graphics.Color.White).border(1.5.dp, c.line, CircleShape)) { ProductImage(url, "", Modifier.fillMaxSize().padding(3.dp)) } }
+                        { Box(Modifier.size(32.dp).clip(CircleShape).background(Color.White)) { ProductImage(url, "", Modifier.fillMaxSize().padding(3.dp)) } }
                     },
                 ) { Text("${s.name} ${s.count}", style = MaterialTheme.typography.labelLarge) }
             }
@@ -434,40 +509,32 @@ fun CategoryScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         item(key = "hero", span = { GridItemSpan(maxLineSpan) }) {
-            Column(
-                Modifier
-                    .windowInsetsPadding(WindowInsets.statusBars)
-                    .padding(top = 8.dp)
-                    .fillMaxWidth()
-                    .brutal(hue, c.line, c.shadow, radius = Brutal.radiusL)
-                    .padding(start = 18.dp, end = 18.dp, top = 14.dp, bottom = 22.dp),
-            ) {
-                Row(
-                    Modifier
-                        .heightIn(min = 44.dp)
-                        .clip(CircleShape)
-                        .background(c.surface)
-                        .border(Brutal.thin, c.line, CircleShape)
-                        .clickable(onClickLabel = "Volver", onClick = onBack)
-                        .padding(start = 8.dp, end = 14.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(Icons.AutoMirrored.Rounded.ArrowBack, null, tint = c.ink, modifier = Modifier.size(20.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text(section.name, style = MaterialTheme.typography.labelLarge, color = c.ink)
-                }
-                Spacer(Modifier.height(14.dp))
-                Row(verticalAlignment = Alignment.Bottom) {
-                    Column(Modifier.weight(1f)) {
-                        Text(cat.name, style = MaterialTheme.typography.displayMedium, color = onHue, modifier = Modifier.semantics { heading() })
-                        Text(
-                            "${cat.count} productos" + (cheapest?.let { " · desde ${money(it.price)}" } ?: ""),
-                            style = MaterialTheme.typography.labelLarge, color = onHue, modifier = Modifier.padding(top = 10.dp),
-                        )
+            SectionBanner(
+                title = cat.name,
+                body = "${cat.count} productos" + (cheapest?.let { " · desde ${money(it.price)}" } ?: ""),
+                icon = sectionIcon(section.icon),
+                hue = hue,
+                images = cat.images.take(2),
+                modifier = Modifier.windowInsetsPadding(WindowInsets.statusBars).padding(top = 8.dp),
+                titleStyle = MaterialTheme.typography.displayMedium.copy(fontSize = 34.sp, lineHeight = 36.sp),
+                top = {
+                    Row(
+                        Modifier
+                            .padding(bottom = 16.dp)
+                            .heightIn(min = 44.dp)
+                            .clip(CircleShape)
+                            .background(c.glass)
+                            .border(Ui.hairline, c.line, CircleShape)
+                            .clickable(onClickLabel = "Volver", onClick = onBack)
+                            .padding(start = 8.dp, end = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, null, tint = c.ink, modifier = Modifier.size(20.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text(section.name, style = MaterialTheme.typography.labelLarge, color = c.ink)
                     }
-                    Stickers(cat.images.take(2), size = 60.dp)
-                }
-            }
+                },
+            )
         }
         item(key = "rail", span = { GridItemSpan(maxLineSpan) }) {
             if (cat.subcategories.size > 1) SubRail() else Spacer(Modifier.height(1.dp))
@@ -612,7 +679,7 @@ fun ResultsScreen(
         }
         if (list.size > limit) {
             item(span = { GridItemSpan(maxLineSpan) }) {
-                BrutalButton("Ver más (${list.size - limit})", { limit += 60 }, Modifier.fillMaxWidth().padding(top = 8.dp))
+                AppButton("Ver más (${list.size - limit})", { limit += 60 }, Modifier.fillMaxWidth().padding(top = 8.dp))
             }
         }
     }

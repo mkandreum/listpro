@@ -20,6 +20,8 @@ export interface Section {
   name: string;
   emoji: string;
   hue: string;
+  icon: string;
+  blurb: string;
   count: number;
   images: string[];
   categories: Category[];

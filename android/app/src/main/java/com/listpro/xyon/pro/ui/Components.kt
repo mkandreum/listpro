@@ -1,14 +1,12 @@
 package com.listpro.xyon.pro.ui
 
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -35,6 +33,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.ArrowDownward
+import androidx.compose.material.icons.rounded.ArrowUpward
+import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Remove
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
@@ -47,11 +48,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -60,6 +61,7 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
@@ -74,49 +76,51 @@ import java.util.Locale
 private val euro = NumberFormat.getCurrencyInstance(Locale.forLanguageTag("es-ES"))
 fun money(v: Double): String = euro.format(v)
 
-/** Bloque neo-brutalista: fondo, trazo de tinta y sombra dura desplazada. */
-fun Modifier.brutal(
-    background: Color,
-    line: Color,
-    shadow: Color,
-    radius: Dp = Brutal.radius,
-    lift: Dp = Brutal.lift,
-    stroke: Dp = Brutal.stroke,
-): Modifier {
+/** Tarjeta suave: fondo, borde fino y esquinas redondeadas. */
+fun Modifier.card(background: Color, border: Color, radius: Dp = Ui.radius): Modifier {
     val shape = RoundedCornerShape(radius)
-    return this
-        .drawBehind {
-            if (lift > 0.dp) {
-                val l = lift.toPx()
-                drawRoundRect(shadow, topLeft = Offset(l, l), size = size, cornerRadius = CornerRadius(radius.toPx()))
-            }
-        }
-        .clip(shape)
-        .background(background)
-        .border(stroke, line, shape)
+    return this.clip(shape).background(background).border(Ui.hairline, border, shape)
 }
 
-/** Botón de bloque: al pulsar se hunde sobre su sombra. */
+/** Tarjeta elevada: card() con una sombra suave debajo (en oscuro, solo el borde). */
 @Composable
-fun BrutalButton(
+fun Modifier.raised(radius: Dp = Ui.radius, background: Color = LocalColors.current.surface): Modifier {
+    val c = LocalColors.current
+    return this
+        .shadow(if (c.isDark) 0.dp else 6.dp, RoundedCornerShape(radius), ambientColor = Color(0x220C1714), spotColor = Color(0x220C1714))
+        .card(background, c.line, radius)
+}
+
+/** Botón: principal con el degradado verde de la marca; secundario en superficie con borde. */
+@Composable
+fun AppButton(
     text: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     primary: Boolean = false,
     danger: Boolean = false,
+    ghost: Boolean = false,
     enabled: Boolean = true,
     leading: (@Composable () -> Unit)? = null,
 ) {
     val c = LocalColors.current
     val source = remember { MutableInteractionSource() }
     val pressed by source.collectIsPressedAsState()
-    val lift by animateDpAsState(if (pressed) 0.dp else 3.dp, spring(stiffness = Spring.StiffnessHigh), label = "lift")
-    val bg = if (primary) c.lime else c.surface
-    val fg = when { primary -> c.onLime; danger -> c.up; else -> c.ink }
+    val scale by animateFloatAsState(if (pressed) 0.97f else 1f, label = "press")
+    val shape = RoundedCornerShape(if (ghost) 999.dp else 16.dp)
+    val fg = when { primary -> c.onGreen; danger -> c.up; ghost -> c.greenInk; else -> c.ink }
     Row(
         modifier = modifier
-            .offset { androidx.compose.ui.unit.IntOffset((3.dp - lift).roundToPx(), (3.dp - lift).roundToPx()) }
-            .brutal(bg, c.line, c.shadow, radius = 14.dp, lift = lift)
+            .scale(scale)
+            .then(if (primary) Modifier.shadow(10.dp, shape, ambientColor = c.greenHi, spotColor = c.greenHi) else Modifier)
+            .clip(shape)
+            .then(
+                when {
+                    primary -> Modifier.background(c.gradient)
+                    ghost -> Modifier.background(c.greenSoft).border(Ui.hairline, c.greenHi.copy(alpha = 0.45f), shape)
+                    else -> Modifier.background(c.surface).border(Ui.hairline, c.lineStrong, shape)
+                },
+            )
             .clickable(source, indication = null, enabled = enabled, role = Role.Button, onClick = onClick)
             .defaultMinSize(minHeight = 48.dp)
             .padding(horizontal = 18.dp),
@@ -130,63 +134,61 @@ fun BrutalButton(
     }
 }
 
-/** Precio a escala de folleto: euros grandes, céntimos pequeños. */
+/** Precio en Sora: euros y céntimos casi al mismo tamaño, como en las etiquetas de tienda. */
 @Composable
-fun Price(value: Double, modifier: Modifier = Modifier, size: Int = 30, color: Color = LocalColors.current.ink) {
+fun Price(value: Double, modifier: Modifier = Modifier, size: Int = 26, color: Color = LocalColors.current.ink) {
     val parts = String.format(Locale.US, "%.2f", value).split(".")
     Text(
         buildAnnotatedString {
             append(parts[0])
-            withStyle(SpanStyle(fontSize = (size * 0.55f).sp)) { append(",${parts[1]} €") }
+            withStyle(SpanStyle(fontSize = (size * 0.82f).sp)) { append(",${parts[1]} €") }
         },
         modifier = modifier,
-        style = TextStyle(fontFamily = Display, fontWeight = FontWeight.ExtraBold, fontSize = size.sp, lineHeight = (size * 0.95f).sp, letterSpacing = (-0.025).sp * size),
+        style = TextStyle(fontFamily = Numeric, fontWeight = FontWeight.Bold, fontSize = size.sp, lineHeight = size.sp, letterSpacing = (-0.035).sp * size),
         color = color,
         maxLines = 1,
     )
 }
 
+private data class SealStyle(val fg: Color, val bg: Color, val icon: ImageVector, val text: String)
+
 @Composable
 fun Seal(p: Product, modifier: Modifier = Modifier) {
-    val c = LocalColors.current
     val d = p.delta
-    val (bg, fg, text) = when {
-        d != null && d < 0 -> Triple(c.down, Color(0xFF0E0E12), "BAJA ${money(-d)}")
-        d != null -> Triple(c.up, Color.White, "SUBE ${money(d)}")
-        p.isNew -> Triple(Color.White, Color(0xFF0E0E12), "NUEVO")
+    val s = when {
+        d != null && d < 0 -> SealStyle(Color(0xFF0F7A37), Color(0xF0F0FDF4), Icons.Rounded.ArrowDownward, "BAJA ${money(-d)}")
+        d != null -> SealStyle(Color(0xFFB42318), Color(0xF0FEF2F2), Icons.Rounded.ArrowUpward, "SUBE ${money(d)}")
+        p.isNew -> SealStyle(Color(0xFF5B3FD9), Color(0xF0F5F3FF), Icons.Rounded.AutoAwesome, "NUEVO")
         else -> return
     }
-    Text(
-        text,
-        modifier = modifier
-            .rotate(-5f)
-            .brutal(bg, Color(0xFF0E0E12), Color(0xFF0E0E12), radius = 10.dp, lift = 2.dp, stroke = 2.dp)
-            .padding(horizontal = 8.dp, vertical = 4.dp),
-        color = fg,
-        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Black),
-    )
+    Row(
+        modifier
+            .clip(CircleShape)
+            .background(s.bg)
+            .border(Ui.hairline, s.fg.copy(alpha = 0.55f), CircleShape)
+            .padding(start = 7.dp, end = 10.dp, top = 4.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(3.dp),
+    ) {
+        Icon(s.icon, null, tint = s.fg, modifier = Modifier.size(13.dp))
+        Text(s.text, color = s.fg, style = TextStyle(fontFamily = Numeric, fontWeight = FontWeight.SemiBold, fontSize = 11.sp))
+    }
 }
 
 @Composable
 fun ProductImage(url: String?, fallback: String, modifier: Modifier = Modifier) {
     val emoji = @Composable { Box(modifier, contentAlignment = Alignment.Center) { Text(fallback, fontSize = 34.sp) } }
     if (url == null) return emoji()
-    SubcomposeAsyncImage(
-        model = url,
-        contentDescription = null,
-        contentScale = ContentScale.Fit,
-        modifier = modifier,
-        error = { emoji() },
-    )
+    SubcomposeAsyncImage(model = url, contentDescription = null, contentScale = ContentScale.Fit, modifier = modifier, error = { emoji() })
 }
 
-/** Añadir → contador. El "+" lima se convierte en un contador de tinta. */
+/** Añadir → contador: el botón verde redondo se convierte en una píldora con − cantidad +. */
 @Composable
 fun QtyControl(qty: Int, name: String, onChange: (Int) -> Unit, modifier: Modifier = Modifier) {
     val c = LocalColors.current
     AnimatedContent(
         targetState = qty > 0,
-        transitionSpec = { (scaleIn(spring(dampingRatio = 0.6f), initialScale = 0.7f) + fadeIn()) togetherWith fadeOut() },
+        transitionSpec = { (scaleIn(spring(dampingRatio = 0.7f), initialScale = 0.8f) + fadeIn()) togetherWith fadeOut() },
         modifier = modifier,
         label = "qty",
     ) { inBasket ->
@@ -194,108 +196,87 @@ fun QtyControl(qty: Int, name: String, onChange: (Int) -> Unit, modifier: Modifi
             Box(
                 Modifier
                     .size(48.dp)
-                    .brutal(c.lime, c.line, c.shadow, radius = 14.dp, lift = 2.dp)
+                    .shadow(8.dp, CircleShape, ambientColor = c.greenHi, spotColor = c.greenHi)
+                    .clip(CircleShape)
+                    .background(c.gradient)
                     .clickable(role = Role.Button) { onChange(1) }
                     .semantics { contentDescription = "Añadir $name a la cesta" },
                 contentAlignment = Alignment.Center,
-            ) { Icon(Icons.Rounded.Add, null, tint = c.onLime, modifier = Modifier.size(26.dp)) }
+            ) { Icon(Icons.Rounded.Add, null, tint = Color.White, modifier = Modifier.size(26.dp)) }
         } else {
             Row(
-                Modifier
-                    .height(48.dp)
-                    .brutal(c.ink, c.line, c.shadow, radius = 14.dp, lift = 2.dp),
+                Modifier.height(44.dp).clip(CircleShape).background(c.greenSoft).border(Ui.hairline, c.greenHi.copy(alpha = 0.5f), CircleShape),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Box(
-                    Modifier.size(width = 40.dp, height = 48.dp).clickable(role = Role.Button) { onChange(-1) }
-                        .semantics { contentDescription = "Quitar uno" },
+                    Modifier.size(width = 36.dp, height = 48.dp).clickable(role = Role.Button) { onChange(-1) }.semantics { contentDescription = "Quitar uno" },
                     contentAlignment = Alignment.Center,
-                ) { Icon(Icons.Rounded.Remove, null, tint = c.ground) }
-                Text("$qty", color = c.ground, style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Black), modifier = Modifier.width(22.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                ) { Icon(Icons.Rounded.Remove, null, tint = c.greenInk) }
+                Text("$qty", color = c.ink, style = TextStyle(fontFamily = Numeric, fontWeight = FontWeight.Bold, fontSize = 16.sp), modifier = Modifier.width(20.dp), textAlign = TextAlign.Center)
                 Box(
-                    Modifier.size(width = 40.dp, height = 48.dp).clickable(role = Role.Button) { onChange(1) }
-                        .semantics { contentDescription = "Añadir uno" },
+                    Modifier.size(width = 36.dp, height = 48.dp).clickable(role = Role.Button) { onChange(1) }.semantics { contentDescription = "Añadir uno" },
                     contentAlignment = Alignment.Center,
-                ) { Icon(Icons.Rounded.Add, null, tint = c.ground) }
+                ) { Icon(Icons.Rounded.Add, null, tint = c.greenInk) }
             }
         }
     }
 }
 
-/** Etiqueta de producto: foto, nombre, formato y precio grande. */
+/** Tarjeta de producto: foto en su pozo blanco, nombre, formato, precio y botón de añadir. */
 @Composable
-fun ProductTag(
-    p: Product,
-    qty: Int,
-    emoji: String,
-    onQty: (Int) -> Unit,
-    onOpen: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
+fun ProductTag(p: Product, qty: Int, emoji: String, onQty: (Int) -> Unit, onOpen: () -> Unit, modifier: Modifier = Modifier) {
     val c = LocalColors.current
-    val inBasket = qty > 0
-    Box(modifier) {
-        Column(
-            Modifier
-                .fillMaxWidth()
-                .then(if (inBasket) Modifier.border(4.dp, c.lime, RoundedCornerShape(Brutal.radius + 3.dp)).padding(3.dp) else Modifier)
-                .brutal(c.surface, c.line, c.shadow),
+    val drop = (p.delta ?: 0.0) < 0
+    val shape = RoundedCornerShape(Ui.radiusL)
+    Column(
+        modifier
+            .fillMaxWidth()
+            .raised(Ui.radiusL)
+            .then(if (qty > 0) Modifier.border(2.dp, c.greenHi.copy(alpha = 0.75f), shape) else Modifier)
+            .padding(10.dp),
+    ) {
+        Box(
+            Modifier.fillMaxWidth().aspectRatio(1.12f).clip(RoundedCornerShape(18.dp)).background(Color.White).clickable(onClickLabel = "Ver detalle", onClick = onOpen),
+            contentAlignment = Alignment.Center,
         ) {
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(1f)
-                    .background(Color.White)
-                    .clickable(onClickLabel = "Ver detalle", onClick = onOpen),
-                contentAlignment = Alignment.Center,
-            ) {
-                ProductImage(p.image, emoji, Modifier.fillMaxSize().padding(14.dp))
-            }
-            Box(Modifier.fillMaxWidth().height(Brutal.thin).background(c.line))
-            Column(Modifier.padding(start = 12.dp, end = 10.dp, top = 10.dp, bottom = 12.dp)) {
-                Text(p.name, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold), maxLines = 2, minLines = 2, overflow = TextOverflow.Ellipsis, color = c.ink)
-                Text(p.size, style = MaterialTheme.typography.bodySmall, color = c.ink2, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Spacer(Modifier.height(8.dp))
-                Row(verticalAlignment = Alignment.Bottom) {
-                    Column(Modifier.weight(1f)) {
-                        val d = p.delta
-                        if (d != null && d < 0 && p.previousPrice != null) {
-                            Text(money(p.previousPrice), style = MaterialTheme.typography.labelSmall.copy(textDecoration = TextDecoration.LineThrough), color = c.ink2)
-                        }
-                        Price(p.price, size = 28)
-                        if (p.refPrice != null && p.refFormat != null) {
-                            Text("${money(p.refPrice)}/${p.refFormat}", style = MaterialTheme.typography.labelSmall, color = c.ink2, maxLines = 1)
-                        }
+            ProductImage(p.image, emoji, Modifier.fillMaxSize().padding(16.dp))
+            Seal(p, Modifier.align(Alignment.TopStart).padding(8.dp))
+        }
+        Column(Modifier.padding(start = 6.dp, end = 2.dp, top = 10.dp, bottom = 2.dp)) {
+            Text(p.name, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, fontSize = 15.sp, lineHeight = 19.sp), maxLines = 2, minLines = 2, overflow = TextOverflow.Ellipsis, color = c.ink)
+            Text(p.size, style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Normal), color = c.ink2, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Spacer(Modifier.height(10.dp))
+            Row(verticalAlignment = Alignment.Bottom) {
+                Column(Modifier.weight(1f)) {
+                    if (drop && p.previousPrice != null) {
+                        Text(money(p.previousPrice), style = TextStyle(fontFamily = Numeric, fontSize = 12.sp, textDecoration = TextDecoration.LineThrough), color = c.ink3)
                     }
-                    QtyControl(qty, p.name, onQty)
+                    Price(p.price, size = if (qty > 0) 21 else 25, color = if (drop) c.greenInk else c.ink)
+                    if (p.refPrice != null && p.refFormat != null) {
+                        Text("${money(p.refPrice)}/${p.refFormat}", style = TextStyle(fontFamily = Numeric, fontSize = 11.sp), color = c.ink3, maxLines = 1, modifier = Modifier.padding(top = 4.dp))
+                    }
                 }
+                QtyControl(qty, p.name, onQty)
             }
         }
-        Seal(p, Modifier.padding(10.dp))
     }
 }
 
 @Composable
-fun Chip(
-    selected: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    leading: (@Composable () -> Unit)? = null,
-    content: @Composable RowScope.() -> Unit,
-) {
+fun Chip(selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier, leading: (@Composable () -> Unit)? = null, content: @Composable RowScope.() -> Unit) {
     val c = LocalColors.current
     Row(
         modifier
             .heightIn(min = 44.dp)
             .clip(CircleShape)
-            .background(if (selected) c.ink else c.surface)
-            .border(Brutal.thin, c.line, CircleShape)
+            .background(if (selected) c.green else c.surface)
+            .border(Ui.hairline, if (selected) Color.Transparent else c.lineStrong, CircleShape)
             .clickable(role = Role.Tab, onClick = onClick)
             .padding(start = if (leading != null) 6.dp else 16.dp, end = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        CompositionLocalProvider(LocalContentColor provides if (selected) c.ground else c.ink) {
+        CompositionLocalProvider(LocalContentColor provides if (selected) Color.White else c.ink) {
             leading?.invoke()
             content()
         }
@@ -303,68 +284,72 @@ fun Chip(
 }
 
 @Composable
-fun HueDot(color: Color, size: Dp = 14.dp) {
-    Box(Modifier.size(size).clip(CircleShape).background(color).border(2.dp, LocalColors.current.line, CircleShape))
+fun HueDot(color: Color, size: Dp = 10.dp) {
+    Box(Modifier.size(size).clip(CircleShape).background(color))
 }
 
-/** Fotos de producto pegadas como pegatinas, ligeramente giradas. */
+/** Fotos de producto como pegatinas blancas giradas. */
 @Composable
 fun Stickers(images: List<String>, modifier: Modifier = Modifier, size: Dp = 62.dp) {
-    val c = LocalColors.current
-    val angles = listOf(-7f, 5f, -3f)
-    Row(modifier, horizontalArrangement = Arrangement.spacedBy(-size * 0.22f)) {
+    val angles = listOf(-8f, 6f, -2f)
+    Row(modifier, horizontalArrangement = Arrangement.spacedBy(-size * 0.25f)) {
         images.take(3).forEachIndexed { i, url ->
             Box(
                 Modifier
                     .size(size)
                     .rotate(angles[i])
-                    .offset(y = if (i == 1) (-4).dp else 0.dp)
-                    .brutal(Color.White, c.line, c.shadow, radius = 14.dp, lift = 2.dp, stroke = 2.dp)
+                    .offset(y = if (i == 1) (-6).dp else 0.dp)
+                    .shadow(6.dp, RoundedCornerShape(16.dp))
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(Color.White)
                     .padding(5.dp),
             ) { ProductImage(url, "", Modifier.fillMaxSize()) }
         }
     }
 }
 
+/** Círculo con icono: la marca de cada pasillo y de cada sección. */
 @Composable
-fun Stamp(text: String, modifier: Modifier = Modifier, dot: Color? = null) {
+fun IconBadge(icon: ImageVector, color: Color, modifier: Modifier = Modifier, size: Dp = 46.dp) {
+    Box(
+        modifier.size(size).shadow(8.dp, CircleShape, ambientColor = color, spotColor = color).clip(CircleShape).background(color),
+        contentAlignment = Alignment.Center,
+    ) { Icon(icon, null, tint = Color.White, modifier = Modifier.size(size * 0.5f)) }
+}
+
+@Composable
+fun Stamp(text: String, modifier: Modifier = Modifier, dot: Color? = null, trailing: ImageVector? = null) {
     val c = LocalColors.current
     Row(
-        modifier.clip(CircleShape).background(c.surface).border(Brutal.thin, c.line, CircleShape).padding(horizontal = 12.dp, vertical = 7.dp),
+        modifier.clip(CircleShape).background(c.greenSoft).border(Ui.hairline, c.greenHi.copy(alpha = 0.45f), CircleShape).padding(horizontal = 12.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(7.dp),
     ) {
         dot?.let { Box(Modifier.size(8.dp).clip(CircleShape).background(it)) }
-        Text(text, style = MaterialTheme.typography.labelMedium, color = c.ink, maxLines = 1)
+        Text(text, style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold), color = c.ink, maxLines = 1)
+        trailing?.let { Icon(it, null, tint = c.greenInk, modifier = Modifier.size(15.dp)) }
     }
 }
 
 @Composable
-fun EmptyState(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, body: String, modifier: Modifier = Modifier, action: (@Composable () -> Unit)? = null) {
+fun EmptyState(icon: ImageVector, title: String, body: String, modifier: Modifier = Modifier, action: (@Composable () -> Unit)? = null) {
     val c = LocalColors.current
     Column(
-        modifier
-            .fillMaxWidth()
-            .padding(top = 16.dp)
-            .border(BorderStroke(Brutal.stroke, c.line.copy(alpha = 0.4f)), RoundedCornerShape(Brutal.radiusL))
-            .padding(horizontal = 20.dp, vertical = 40.dp),
+        modifier.fillMaxWidth().padding(top = 16.dp).card(c.surface, c.lineStrong, Ui.radiusL).padding(horizontal = 20.dp, vertical = 40.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Box(Modifier.rotate(-6f).size(72.dp).brutal(c.lime, c.line, c.shadow, radius = 22.dp), contentAlignment = Alignment.Center) {
-            Icon(icon, null, tint = c.onLime, modifier = Modifier.size(34.dp))
+        Box(Modifier.size(68.dp).clip(RoundedCornerShape(22.dp)).background(c.gradient), contentAlignment = Alignment.Center) {
+            Icon(icon, null, tint = Color.White, modifier = Modifier.size(32.dp))
         }
         Spacer(Modifier.height(4.dp))
-        Text(title, style = MaterialTheme.typography.titleLarge, color = c.ink, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-        Text(body, style = MaterialTheme.typography.bodyLarge, color = c.ink2, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+        Text(title, style = MaterialTheme.typography.titleLarge, color = c.ink, textAlign = TextAlign.Center)
+        Text(body, style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Normal), color = c.ink2, textAlign = TextAlign.Center)
         action?.invoke()
     }
 }
 
-/** Panel blanco con trazo y sombra para agrupar contenido en Gastos y Ajustes. */
 @Composable
 fun Panel(modifier: Modifier = Modifier, padding: PaddingValues = PaddingValues(20.dp), content: @Composable () -> Unit) {
-    val c = LocalColors.current
-    Box(modifier.fillMaxWidth().padding(top = 16.dp).brutal(c.surface, c.line, c.shadow, radius = Brutal.radiusL).padding(padding)) { content() }
+    Box(modifier.fillMaxWidth().padding(top = 16.dp).raised(Ui.radiusL).padding(padding)) { content() }
 }
-

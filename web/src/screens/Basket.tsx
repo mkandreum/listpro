@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Check, ChevronRight, RotateCcw, ShoppingBasket, Trash2, TrendingDown, TrendingUp } from 'lucide-react';
-import { inkOn, money, units } from '../lib';
+import { money, units } from '../lib';
 import { href } from '../router';
 import { basketLines, clearBasket, deleteBasket, dropMissing, reuseBasket, saveBasket, toast, toggleInCart, useStore } from '../store';
 import type { Product } from '../types';
@@ -91,9 +91,9 @@ export function Basket({ onOpen }: { onOpen: (p: Product) => void }) {
             const hue = s?.hue ?? '#B9BCC4';
             return (
               <section key={sectionId} aria-label={s?.name}>
-                <div className="aisle-band" style={{ '--hue': hue, '--on-hue': inkOn(hue) } as React.CSSProperties}>
+                <div className="aisle-band" style={{ '--hue': hue } as React.CSSProperties}>
                   <span>{s?.name ?? 'Otros'}</span>
-                  <span className="num small">{money(ls.reduce((a, l) => a + l.p.price * l.qty, 0))}</span>
+                  <span className="sum">{money(ls.reduce((a, l) => a + l.p.price * l.qty, 0))}</span>
                 </div>
                 {ls.map(({ p, qty }) => {
                   const done = inCart.includes(p.id);

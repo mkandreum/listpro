@@ -8,18 +8,18 @@
 // mapeado cae en el pasillo "Otros" con el emoji de su categoría, nunca se pierde.
 
 export const SECTIONS = [
-  { id: 'frescos', hue: '#2FD27A', name: 'Frescos', emoji: '🥬', categories: [1, 3, 2, 4, 5] },
-  { id: 'lacteos', hue: '#7CC8FF', name: 'Lácteos y huevos', emoji: '🥛', categories: [6, 11] },
-  { id: 'despensa', hue: '#FF8A2A', name: 'Despensa', emoji: '🥫', categories: [12, 13, 14, 7, 8, 9, 15] },
-  { id: 'congelados', hue: '#5C7CFF', name: 'Congelados y platos listos', emoji: '❄️', categories: [17, 16] },
-  { id: 'bebidas', hue: '#FF5FA8', name: 'Bebidas', emoji: '🥤', categories: [18, 10, 19] },
-  { id: 'cuidado', hue: '#B691FF', name: 'Cuidado personal', emoji: '🧴', categories: [20, 21, 22, 23] },
-  { id: 'hogar', hue: '#FFD23F', name: 'Limpieza y hogar', emoji: '🧹', categories: [26] },
-  { id: 'bebe', hue: '#6FE3CF', name: 'Bebé', emoji: '👶', categories: [24] },
-  { id: 'mascotas', hue: '#D9935A', name: 'Mascotas', emoji: '🐾', categories: [25] },
+  { id: 'frescos', icon: 'leaf', blurb: 'Fruta, verdura, carne, pescado, charcutería y pan del día.', hue: '#2FD27A', name: 'Frescos', emoji: '🥬', categories: [1, 3, 2, 4, 5] },
+  { id: 'lacteos', icon: 'milk', blurb: 'Leche, huevos, mantequilla, yogures y postres.', hue: '#7CC8FF', name: 'Lácteos y huevos', emoji: '🥛', categories: [6, 11] },
+  { id: 'despensa', icon: 'wheat', blurb: 'Aceite, pasta, arroz, conservas, café, cereales y dulces.', hue: '#FF8A2A', name: 'Despensa', emoji: '🥫', categories: [12, 13, 14, 7, 8, 9, 15] },
+  { id: 'congelados', icon: 'snowflake', blurb: 'Congelados, pizzas y platos listos para calentar.', hue: '#5C7CFF', name: 'Congelados y platos listos', emoji: '❄️', categories: [17, 16] },
+  { id: 'bebidas', icon: 'wine', blurb: 'Agua, refrescos, zumos, cerveza y vino.', hue: '#FF5FA8', name: 'Bebidas', emoji: '🥤', categories: [18, 10, 19] },
+  { id: 'cuidado', icon: 'sparkles', blurb: 'Higiene, cabello, maquillaje y parafarmacia.', hue: '#B691FF', name: 'Cuidado personal', emoji: '🧴', categories: [20, 21, 22, 23] },
+  { id: 'hogar', icon: 'spray', blurb: 'Detergentes, limpieza, papel y menaje.', hue: '#FFD23F', name: 'Limpieza y hogar', emoji: '🧹', categories: [26] },
+  { id: 'bebe', icon: 'baby', blurb: 'Alimentación infantil, pañales y cuidado del bebé.', hue: '#6FE3CF', name: 'Bebé', emoji: '👶', categories: [24] },
+  { id: 'mascotas', icon: 'paw', blurb: 'Comida y cuidado para perro, gato y otras mascotas.', hue: '#D9935A', name: 'Mascotas', emoji: '🐾', categories: [25] },
 ];
 
-export const OTHER_SECTION = { id: 'otros', hue: '#B9BCC4', name: 'Otros', emoji: '🛒' };
+export const OTHER_SECTION = { id: 'otros', icon: 'bag', blurb: 'Lo que Mercadona añada y aún no tenga pasillo.', hue: '#B9BCC4', name: 'Otros', emoji: '🛒' };
 
 // Categorías (nivel 0 de Mercadona)
 export const CATEGORY_META = {
@@ -126,7 +126,7 @@ export function buildTree(categories, subcategories, counts) {
 
   const sections = SECTIONS.map((s) => {
     const cats = s.categories.map(toCat).filter(Boolean);
-    return { id: s.id, name: s.name, emoji: s.emoji, hue: s.hue, count: cats.reduce((a, c) => a + c.count, 0), categories: cats };
+    return { id: s.id, name: s.name, emoji: s.emoji, hue: s.hue, icon: s.icon, blurb: s.blurb, count: cats.reduce((a, c) => a + c.count, 0), categories: cats };
   }).filter((s) => s.categories.length);
 
   const known = new Set(SECTIONS.flatMap((s) => s.categories));

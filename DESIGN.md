@@ -1,49 +1,46 @@
 # Design
 
-Sistema visual de ListPro 2.0: **folleto de ofertas del súper reinventado** — neo-brutalismo (trazo de tinta, sombra dura desplazada) mezclado con cristal esmerilado solo donde algo flota sobre contenido en movimiento. Implementado en `web/src/styles.css` y `android/app/src/main/java/com/listpro/xyon/pro/ui/Theme.kt` + `Components.kt`.
+Sistema visual de ListPro 2.0: **súper fresco y luminoso**. Fondo casi negro verdoso (oscuro) o gris verdoso muy claro (claro), tarjetas suaves con borde fino, verde de marca con degradado y brillo, y cristal en lo que flota (buscador, barra de navegación). Cada pasillo tiene su color, icono y descripción, que sirve la API para que web y Android coincidan.
+
+Implementado en `web/src/styles.css` y `android/app/src/main/java/com/listpro/xyon/pro/ui/Theme.kt` + `Components.kt`.
 
 ## Tokens
 
 | Token | Claro | Oscuro | Uso |
 |---|---|---|---|
-| ground | `#F3F4F1` | `#111116` | Fondo de pantalla |
-| surface | `#FFFFFF` | `#1C1C23` | Etiquetas, fichas, paneles |
-| surface-2 | `#E9EAE5` | `#26262F` | Esqueletos de carga |
-| ink | `#0E0E12` | `#F4F4EE` | Texto y trazo |
-| ink-2 | `#4B4D55` | `#B4B5BE` | Texto secundario |
-| line / shadow | `#0E0E12` / `#0E0E12` | `#F4F4EE` / `#000` | Trazo y sombra dura |
-| glass | blanco 64 % + blur 18 px | `#1C1C23` 62 % + blur | Buscador, raíl de subcategorías, barra de navegación |
-| lime | `#C8FF3D` (texto `#0E0E12`) | igual | Acción principal, indicador de la barra, total de la cesta |
-| down | `#13C46B` | igual | Sello "BAJA", avisos de bajada |
-| up | `#FF4D3A` | igual | Sello "SUBE", contador de cesta, avisos de subida |
+| ground | `#F3F6F4` | `#08110F` | Fondo |
+| surface | `#FFFFFF` | `#101B18` | Tarjetas |
+| surface-2 | `#EEF3EF` | `#16241F` | Pozos, esqueletos |
+| ink / ink-2 / ink-3 | `#0C1714` / `#4E5C57` / `#75827D` | `#F1F6F3` / `#A6B5AF` / `#7C8B85` | Texto |
+| line / line-strong | tinta 9 % / 16 % | blanco 7 % / 14 % | Bordes de 1 px |
+| green | `#16A34A` | `#22C55E` | Acción, chips activos |
+| green-ink | `#0F7A37` | `#4ADE80` | Precio rebajado, cifras |
+| gradiente | `#3BE07E → #15A64A` | igual | Botón principal, +, indicador de navegación, total de la cesta, logotipo |
+| up | `#E5484D` | `#FF6B6E` | Subidas, contador de cesta |
+| violet | `#7C5CFF` | igual | Novedades |
+| glass | blanco 74 % + blur 22 px | `#101B18` 72 % + blur | Buscador, raíl de subcategorías, navegación |
 
-### Color por pasillo (`hue`, servido por la API)
+Color, icono (`icon`) y descripción (`blurb`) por pasillo: `server/src/taxonomy.js`.
 
-Frescos `#2FD27A` · Lácteos y huevos `#7CC8FF` · Despensa `#FF8A2A` · Congelados `#5C7CFF` · Bebidas `#FF5FA8` · Cuidado personal `#B691FF` · Limpieza y hogar `#FFD23F` · Bebé `#6FE3CF` · Mascotas `#D9935A` · Otros `#B9BCC4`. El texto sobre el color se elige por contraste (tinta o blanco). Cada pasillo pinta su bloque de borde a borde en Inicio y la banda de su grupo en la Cesta.
+## Tipografía (tres voces)
 
-## Forma
+- **Bricolage Grotesque** 700–800: titulares, marca (`List` + `Pro` en verde), nombres de pasillo.
+- **Figtree** 400–700: texto e interfaz.
+- **Sora** 500–700: precios, contadores, cifras, código de sincronización.
 
-- Trazo 2.5 px (2 px en piezas pequeñas); radios 12 / 18 / 26; sombra dura 4 px desplazada sin desenfoque (2–3 px en controles, 6 px en bloques protagonistas).
-- Al pulsar, los botones se hunden sobre su sombra.
-- Barra de navegación: píldora de cristal con indicador lima deslizante (muelle), raíl vertical en escritorio ≥960 px.
+Web: `@fontsource-variable`. Android: TTF variables en `res/font`, tamaños en `sp`.
 
-## Tipografía
+## Forma y profundidad
 
-- **Bricolage Grotesque** (variable, 600–800) para títulos y precios; tracking negativo (−0.02 a −0.05 em).
-- **Figtree** (variable, 400–900) para texto e interfaz.
-- Precio a escala de folleto: euros grandes, céntimos a ~55 %.
-- Web: autoalojadas con `@fontsource-variable`. Android: TTF variables en `res/font`, tamaños en `sp`.
+Radios 12 / 20 / 26 px, píldoras para chips, sellos y navegación. Borde de 1 px; sombra suave en claro, solo borde y brillo interior en oscuro. Lo accionable verde lleva un resplandor verde.
 
-## Componentes firma
+## Componentes
 
-- **Etiqueta de producto**: foto sobre blanco, nombre en 2 líneas, formato, precio grande, €/kg, sello girado (BAJA/SUBE/NUEVO); al añadir, el "+" lima se convierte en contador de tinta y la etiqueta gana un halo lima.
-- **Ficha de categoría**: nombre grande + 3 fotos de producto como pegatinas giradas; la categoría mayor de cada pasillo ocupa dos columnas.
-- **Total de la cesta**: bloque lima con el total a escala display y barra de progreso "en el carro".
+- **Tarjeta de producto**: foto en pozo blanco redondeado, sello en píldora con flecha (BAJA / SUBE / NUEVO), nombre, formato, precio en Sora (verde si ha bajado) y botón + redondo que pasa a contador − n +.
+- **Banner de pasillo**: degradado del color del pasillo, icono en círculo, título, descripción, contador y fotos de producto como pegatinas; debajo, fila de fichas de categoría con fotos.
+- **Accesos rápidos**: tarjetas con icono en baldosa de color, título y cifra.
+- **Navegación**: píldora de cristal con indicador verde deslizante (muelle suave); raíl vertical en escritorio.
 
 ## Movimiento
 
-Un muelle (`cubic-bezier(.34,1.3–1.56,.64,1)` / `spring(0.6–0.72)`) para el indicador de navegación, el paso de "+" a contador y el rebote del contador de cesta. Resto: fundidos cortos. Se respeta "reducir movimiento".
-
-## Iconos
-
-Lucide (web) y Material Symbols Rounded (Android). Los emoji solo aparecen como reserva si falla la foto de un producto.
+Indicador de navegación y paso de + a contador con muelle suave; el resto, desvanecidos y elevaciones cortas. Se respeta "reducir movimiento".

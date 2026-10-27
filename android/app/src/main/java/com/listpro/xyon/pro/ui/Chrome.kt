@@ -51,10 +51,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -97,13 +95,11 @@ fun GlassPillNav(selected: Tab, basketCount: Int, onSelect: (Tab) -> Unit, modif
             .widthIn(max = 440.dp)
             .fillMaxWidth()
             .height(76.dp)
-            .drawBehind {
-                drawRoundRect(c.shadow, topLeft = Offset(4.dp.toPx(), 4.dp.toPx()), size = size, cornerRadius = CornerRadius(size.height / 2))
-            }
+            .shadow(16.dp, CircleShape, ambientColor = Color(0x330C1714), spotColor = Color(0x330C1714))
             .clip(CircleShape)
             .background(c.glass)
-            .background(Brush.verticalGradient(listOf(Color.White.copy(alpha = if (c.isDark) 0.06f else 0.35f), Color.Transparent)))
-            .border(Brutal.thin, c.line, CircleShape)
+            .background(Brush.verticalGradient(listOf(Color.White.copy(alpha = if (c.isDark) 0.05f else 0.4f), Color.Transparent)))
+            .border(Ui.hairline, c.lineStrong, CircleShape)
             .padding(7.dp)
             .selectableGroup(),
     ) {
@@ -115,13 +111,10 @@ fun GlassPillNav(selected: Tab, basketCount: Int, onSelect: (Tab) -> Unit, modif
                 .offset(x = x)
                 .width(itemWidth)
                 .fillMaxHeight()
-                .drawBehind {
-                    drawRoundRect(c.shadow, topLeft = Offset(2.dp.toPx(), 2.dp.toPx()), size = size, cornerRadius = CornerRadius(size.height / 2))
-                }
+                .shadow(10.dp, CircleShape, ambientColor = c.greenHi, spotColor = c.greenHi)
                 .clip(CircleShape)
-                .background(c.lime.copy(alpha = 0.88f))
-                .background(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.55f), Color.Transparent), endY = 60f))
-                .border(Brutal.thin, c.line, CircleShape),
+                .background(c.gradient)
+                .background(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.25f), Color.Transparent), endY = 40f)),
         )
         Row(Modifier.fillMaxSize()) {
             NAV.forEachIndexed { i, item ->
@@ -137,7 +130,7 @@ fun GlassPillNav(selected: Tab, basketCount: Int, onSelect: (Tab) -> Unit, modif
                     verticalArrangement = Arrangement.Center,
                 ) {
                     Box {
-                        Icon(item.icon, null, tint = if (active) c.onLime else c.ink2, modifier = Modifier.size(24.dp).scale(scale))
+                        Icon(item.icon, null, tint = if (active) Color.White else c.ink2, modifier = Modifier.size(24.dp).scale(scale))
                         if (item.tab == Tab.Basket && basketCount > 0) {
                             Box(
                                 Modifier
@@ -147,7 +140,6 @@ fun GlassPillNav(selected: Tab, basketCount: Int, onSelect: (Tab) -> Unit, modif
                                     .widthIn(min = 22.dp)
                                     .clip(CircleShape)
                                     .background(c.up)
-                                    .border(2.dp, c.line, CircleShape)
                                     .padding(horizontal = 5.dp)
                                     .semantics { contentDescription = "$basketCount unidades" },
                                 contentAlignment = Alignment.Center,
@@ -159,7 +151,7 @@ fun GlassPillNav(selected: Tab, basketCount: Int, onSelect: (Tab) -> Unit, modif
                     Text(
                         item.label,
                         style = MaterialTheme.typography.labelSmall.copy(fontWeight = if (active) FontWeight.ExtraBold else FontWeight.Bold),
-                        color = if (active) c.onLime else c.ink2,
+                        color = if (active) Color.White else c.ink2,
                     )
                 }
             }
@@ -179,13 +171,13 @@ fun ProductSheet(p: Product, sectionName: String?, emoji: String, qty: Int, api:
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         containerColor = c.surface,
-        shape = RoundedCornerShape(topStart = Brutal.radiusL, topEnd = Brutal.radiusL),
+        shape = RoundedCornerShape(topStart = Ui.radiusL, topEnd = Ui.radiusL),
     ) {
         Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 28.dp)) {
             sectionName?.let { Stamp(it) }
             Box(
-                Modifier.padding(top = 12.dp).fillMaxWidth().aspectRatio(4f / 3f).clip(RoundedCornerShape(Brutal.radius)).background(Color.White)
-                    .border(Brutal.thin, c.line, RoundedCornerShape(Brutal.radius)),
+                Modifier.padding(top = 12.dp).fillMaxWidth().aspectRatio(4f / 3f).clip(RoundedCornerShape(Ui.radius)).background(Color.White)
+                    .border(Ui.hairline, c.line, RoundedCornerShape(Ui.radius)),
             ) {
                 ProductImage(p.image?.replace("h=300&w=300", "h=600&w=600"), emoji, Modifier.fillMaxSize().padding(18.dp))
                 Seal(p, Modifier.padding(10.dp))
@@ -203,7 +195,7 @@ fun ProductSheet(p: Product, sectionName: String?, emoji: String, qty: Int, api:
             PriceChart(history)
             p.url?.let { url ->
                 Spacer(Modifier.height(18.dp))
-                BrutalButton("Ver en la tienda de Mercadona", { uri.openUri(url) }, Modifier.fillMaxWidth(), leading = { Icon(Icons.AutoMirrored.Rounded.OpenInNew, null, Modifier.size(18.dp)) })
+                AppButton("Ver en la tienda de Mercadona", { uri.openUri(url) }, Modifier.fillMaxWidth(), leading = { Icon(Icons.AutoMirrored.Rounded.OpenInNew, null, Modifier.size(18.dp)) })
             }
         }
     }
@@ -213,7 +205,7 @@ fun ProductSheet(p: Product, sectionName: String?, emoji: String, qty: Int, api:
 private fun PriceChart(history: PriceHistory?) {
     val c = LocalColors.current
     if (history == null) {
-        Box(Modifier.padding(top = 10.dp).fillMaxWidth().height(110.dp).clip(RoundedCornerShape(Brutal.radiusS)).background(c.surface2))
+        Box(Modifier.padding(top = 10.dp).fillMaxWidth().height(110.dp).clip(RoundedCornerShape(Ui.radiusS)).background(c.surface2))
         return
     }
     val pts = history.history
@@ -228,8 +220,8 @@ private fun PriceChart(history: PriceHistory?) {
     val lo = prices.min()
     val hi = prices.max()
     Canvas(
-        Modifier.padding(top = 10.dp).fillMaxWidth().height(110.dp).clip(RoundedCornerShape(Brutal.radiusS)).background(c.ground)
-            .border(Brutal.thin, c.line, RoundedCornerShape(Brutal.radiusS)).padding(12.dp)
+        Modifier.padding(top = 10.dp).fillMaxWidth().height(110.dp).clip(RoundedCornerShape(Ui.radiusS)).background(c.ground)
+            .border(Ui.hairline, c.line, RoundedCornerShape(Ui.radiusS)).padding(12.dp)
             .semantics { contentDescription = "Historial de precio entre ${money(lo)} y ${money(hi)}" },
     ) {
         val t0 = times.first().toFloat()

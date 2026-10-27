@@ -9,6 +9,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.ExperimentalTextApi
@@ -30,37 +31,45 @@ data class ListProColors(
     val surface2: Color,
     val ink: Color,
     val ink2: Color,
+    val ink3: Color,
     val line: Color,
-    val shadow: Color,
+    val lineStrong: Color,
     val glass: Color,
-    val lime: Color = Color(0xFFC8FF3D),
-    val onLime: Color = Color(0xFF0E0E12),
-    val down: Color = Color(0xFF13C46B),
-    val up: Color = Color(0xFFFF4D3A),
-    val focus: Color = Color(0xFF5C7CFF),
+    val green: Color,
+    val greenInk: Color,
+    val up: Color,
     val isDark: Boolean,
-)
+    val greenHi: Color = Color(0xFF3BE07E),
+    val greenLo: Color = Color(0xFF15A64A),
+    val onGreen: Color = Color.White,
+    val violet: Color = Color(0xFF7C5CFF),
+    val shadow: Color = Color.Black,
+) {
+    val greenSoft: Color get() = greenHi.copy(alpha = 0.14f)
+    /** Degradado de marca: botones principales, indicador de navegación, total de la cesta. */
+    val gradient: Brush get() = Brush.verticalGradient(listOf(greenHi, greenLo))
+}
 
 private val Light = ListProColors(
-    ground = Color(0xFFF3F4F1), surface = Color.White, surface2 = Color(0xFFE9EAE5),
-    ink = Color(0xFF0E0E12), ink2 = Color(0xFF4B4D55), line = Color(0xFF0E0E12), shadow = Color(0xFF0E0E12),
-    glass = Color(0xD6FFFFFF), isDark = false,
+    ground = Color(0xFFF3F6F4), surface = Color.White, surface2 = Color(0xFFEEF3EF),
+    ink = Color(0xFF0C1714), ink2 = Color(0xFF4E5C57), ink3 = Color(0xFF75827D),
+    line = Color(0x170C1714), lineStrong = Color(0x290C1714), glass = Color(0xF2FFFFFF),
+    green = Color(0xFF16A34A), greenInk = Color(0xFF0F7A37), up = Color(0xFFE5484D), isDark = false,
 )
 
 private val Dark = ListProColors(
-    ground = Color(0xFF111116), surface = Color(0xFF1C1C23), surface2 = Color(0xFF26262F),
-    ink = Color(0xFFF4F4EE), ink2 = Color(0xFFB4B5BE), line = Color(0xFFF4F4EE), shadow = Color.Black,
-    glass = Color(0xD91C1C23), isDark = true,
+    ground = Color(0xFF08110F), surface = Color(0xFF101B18), surface2 = Color(0xFF16241F),
+    ink = Color(0xFFF1F6F3), ink2 = Color(0xFFA6B5AF), ink3 = Color(0xFF7C8B85),
+    line = Color(0x12FFFFFF), lineStrong = Color(0x24FFFFFF), glass = Color(0xF0101B18),
+    green = Color(0xFF22C55E), greenInk = Color(0xFF4ADE80), up = Color(0xFFFF6B6E), isDark = true,
 )
 
 val LocalColors = staticCompositionLocalOf { Light }
 
-/** Trazo y sombra dura del sistema neo-brutalista. */
-object Brutal {
-    val stroke = 2.5.dp
-    val thin = 2.dp
-    val lift = 4.dp
-    val radius = 18.dp
+/** Radios y trazos del sistema: tarjetas suaves con borde fino. */
+object Ui {
+    val hairline = 1.dp
+    val radius = 20.dp
     val radiusL = 26.dp
     val radiusS = 12.dp
 }
@@ -72,6 +81,8 @@ private fun variable(res: Int, weight: Int) =
 val Display = FontFamily(
     variable(R.font.bricolage, 600), variable(R.font.bricolage, 700), variable(R.font.bricolage, 800),
 )
+/** Cifras y precios. */
+val Numeric = FontFamily(variable(R.font.sora, 500), variable(R.font.sora, 600), variable(R.font.sora, 700))
 val Body = FontFamily(
     variable(R.font.figtree, 400), variable(R.font.figtree, 500), variable(R.font.figtree, 600),
     variable(R.font.figtree, 700), variable(R.font.figtree, 800), variable(R.font.figtree, 900),
@@ -106,9 +117,9 @@ fun ListProTheme(pref: ThemePref, content: @Composable () -> Unit) {
     }
     val c = if (dark) Dark else Light
     val scheme = if (dark) {
-        darkColorScheme(primary = c.lime, onPrimary = c.onLime, background = c.ground, onBackground = c.ink, surface = c.surface, onSurface = c.ink, surfaceVariant = c.surface2, onSurfaceVariant = c.ink2, outline = c.line, error = c.up)
+        darkColorScheme(primary = c.green, onPrimary = c.onGreen, background = c.ground, onBackground = c.ink, surface = c.surface, onSurface = c.ink, surfaceVariant = c.surface2, onSurfaceVariant = c.ink2, outline = c.line, error = c.up)
     } else {
-        lightColorScheme(primary = c.lime, onPrimary = c.onLime, background = c.ground, onBackground = c.ink, surface = c.surface, onSurface = c.ink, surfaceVariant = c.surface2, onSurfaceVariant = c.ink2, outline = c.line, error = c.up)
+        lightColorScheme(primary = c.green, onPrimary = c.onGreen, background = c.ground, onBackground = c.ink, surface = c.surface, onSurface = c.ink, surfaceVariant = c.surface2, onSurfaceVariant = c.ink2, outline = c.line, error = c.up)
     }
     CompositionLocalProvider(LocalColors provides c) {
         MaterialTheme(colorScheme = scheme, typography = ListProTypography, content = content)

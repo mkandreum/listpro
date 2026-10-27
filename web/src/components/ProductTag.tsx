@@ -1,12 +1,12 @@
 import { memo, useState } from 'react';
-import { Minus, Plus } from 'lucide-react';
+import { ArrowDown, ArrowUp, Minus, Plus, Sparkles } from 'lucide-react';
 import { money, priceDelta, splitPrice } from '../lib';
 import { changeQty, useStore } from '../store';
 import type { Product } from '../types';
 
 export function Price({ value, className = 'price' }: { value: number; className?: string }) {
   const { int, dec } = splitPrice(value);
-  return <span className={className}>{int}<span className="dec">{dec} €</span></span>;
+  return <span className={className}>{int}<span className="dec">{dec}&nbsp;€</span></span>;
 }
 
 export function ProductImage({ p, className }: { p: Product; className?: string }) {
@@ -18,8 +18,11 @@ export function ProductImage({ p, className }: { p: Product; className?: string 
 
 export function Seal({ p }: { p: Product }) {
   const d = priceDelta(p);
-  if (d != null) return <span className={`seal ${d < 0 ? 'down' : 'up'}`}>{d < 0 ? 'BAJA' : 'SUBE'} {money(Math.abs(d))}</span>;
-  if (p.isNew) return <span className="seal new">NUEVO</span>;
+  if (d != null) {
+    const Icon = d < 0 ? ArrowDown : ArrowUp;
+    return <span className={`seal ${d < 0 ? 'down' : 'up'}`}><Icon size={13} strokeWidth={2.8} />{d < 0 ? 'BAJA' : 'SUBE'} {money(Math.abs(d))}</span>;
+  }
+  if (p.isNew) return <span className="seal new"><Sparkles size={12} strokeWidth={2.6} />NUEVO</span>;
   return null;
 }
 
@@ -28,7 +31,7 @@ export function QtyControl({ id, name }: { id: string; name: string }) {
   if (!qty) {
     return (
       <button className="add" onClick={() => changeQty(id, 1)} aria-label={`Añadir ${name} a la cesta`}>
-        <Plus size={22} strokeWidth={3} />
+        <Plus size={24} strokeWidth={2.6} />
       </button>
     );
   }
@@ -62,7 +65,7 @@ export const ProductTag = memo(function ProductTag({ p, onOpen, className = '' }
         <div className="tag-foot">
           <div>
             {d != null && d < 0 && p.previousPrice != null && <div className="price-old num">{money(p.previousPrice)}</div>}
-            <Price value={p.price} />
+            <Price value={p.price} className={`price ${d != null && d < 0 ? 'drop' : ''}`} />
             {p.refPrice != null && p.refFormat && <div className="price-ref num">{money(p.refPrice)}/{p.refFormat}</div>}
           </div>
           <QtyControl id={p.id} name={p.name} />

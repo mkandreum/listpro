@@ -1,37 +1,44 @@
 import { useMemo } from 'react';
-import { ArrowRight, ArrowUpRight, Sparkles, TrendingDown } from 'lucide-react';
-import { inkOn, priceDelta } from '../lib';
+import { ArrowDown, ChevronRight, Sparkles, TrendingDown } from 'lucide-react';
+import { priceDelta } from '../lib';
 import { href } from '../router';
 import { useStore } from '../store';
 import type { Category, Product, Section } from '../types';
 import { ProductTag } from '../components/ProductTag';
+import { SectionIcon } from '../components/SectionIcon';
 
-function CategoryCard({ c, wide }: { c: Category; wide: boolean }) {
+const hueStyle = (hue: string) => ({ '--hue': hue } as React.CSSProperties);
+
+function CategoryTile({ c }: { c: Category }) {
   return (
-    <a href={href({ name: 'category', id: c.id })} className={`cat-card ${wide ? 'wide' : ''}`} style={{ textDecoration: 'none' }}>
-      <span className="go" aria-hidden><ArrowUpRight size={18} strokeWidth={2.75} /></span>
-      <div>
-        <div className="name">{c.name}</div>
-        <div className="meta num">{c.count} productos · {c.subcategories.length} secciones</div>
+    <a href={href({ name: 'category', id: c.id })} className="cat-tile" aria-label={`${c.name}, ${c.count} productos`}>
+      <div className="pics" aria-hidden>
+        {c.images.map((src) => <img key={src} src={src} alt="" loading="lazy" decoding="async" />)}
       </div>
-      <div className="stickers" aria-hidden>
-        {c.images.map((src) => <img key={src} className="sticker" src={src} alt="" loading="lazy" decoding="async" />)}
-      </div>
+      <div className="label"><b>{c.name}</b><ChevronRight size={18} /></div>
+      <div className="meta">{c.count} productos</div>
     </a>
   );
 }
 
 function Aisle({ s }: { s: Section }) {
-  // La categoría más grande de cada pasillo ocupa dos columnas: el mosaico respira y no es una rejilla plana.
-  const biggest = s.categories.reduce((a, c) => (c.count > a.count ? c : a), s.categories[0]);
   return (
-    <section className="aisle" id={`pasillo-${s.id}`} style={{ '--hue': s.hue, '--on-hue': inkOn(s.hue) } as React.CSSProperties} aria-labelledby={`h-${s.id}`}>
-      <div className="aisle-head">
-        <h2 className="h-section" id={`h-${s.id}`}>{s.name}</h2>
-        <span className="count num">{s.count.toLocaleString('es-ES')}</span>
+    <section className="aisle" id={`pasillo-${s.id}`} style={hueStyle(s.hue)} aria-labelledby={`h-${s.id}`}>
+      <div className="banner">
+        <div className="banner-copy">
+          <div className="banner-title">
+            <span className="h-icon"><SectionIcon name={s.icon} size={22} strokeWidth={2.2} /></span>
+            <h2 id={`h-${s.id}`}>{s.name}</h2>
+          </div>
+          <p>{s.blurb}</p>
+        </div>
+        <div className="collage" aria-hidden>
+          {s.images.slice(0, 3).map((src) => <img key={src} src={src} alt="" loading="lazy" decoding="async" />)}
+        </div>
+        <span className="count">{s.count.toLocaleString('es-ES')} <ChevronRight size={16} /></span>
       </div>
-      <div className="cat-grid">
-        {s.categories.map((c) => <CategoryCard key={c.id} c={c} wide={c === biggest && s.categories.length > 2} />)}
+      <div className="cat-row">
+        {s.categories.map((c) => <CategoryTile key={c.id} c={c} />)}
       </div>
     </section>
   );
@@ -51,20 +58,23 @@ export function Home({ onOpen }: { onOpen: (p: Product) => void }) {
 
   return (
     <>
-      <nav className="chips" aria-label="Ir a un pasillo">
+      <nav className="stats" aria-label="Accesos rápidos">
         {deals.length > 0 && (
-          <a className="chip text-only" href={href({ name: 'deals', kind: 'down' })} style={{ textDecoration: 'none' }}>
-            <TrendingDown size={18} strokeWidth={2.75} /> Bajadas <span className="n num">{deals.length}</span>
+          <a className="stat" href={href({ name: 'deals', kind: 'down' })}>
+            <span className="ic"><TrendingDown size={24} strokeWidth={2.4} /></span>
+            <span><span className="t">Bajadas</span><span className="v">{deals.length}</span></span>
           </a>
         )}
         {fresh > 0 && (
-          <a className="chip text-only" href={href({ name: 'deals', kind: 'new' })} style={{ textDecoration: 'none' }}>
-            <Sparkles size={18} strokeWidth={2.5} /> Novedades <span className="n num">{fresh}</span>
+          <a className="stat" href={href({ name: 'deals', kind: 'new' })} style={hueStyle('#7C5CFF')}>
+            <span className="ic"><Sparkles size={22} strokeWidth={2.2} /></span>
+            <span><span className="t">Novedades</span><span className="v" style={{ color: 'var(--violet)' }}>{fresh}</span></span>
           </a>
         )}
         {catalog.sections.map((s) => (
-          <button key={s.id} className="chip text-only" onClick={() => document.getElementById(`pasillo-${s.id}`)?.scrollIntoView({ behavior: 'smooth' })}>
-            <span className="dot" style={{ background: s.hue, marginLeft: -4 }} />{s.name}
+          <button key={s.id} className="stat" style={hueStyle(s.hue)} onClick={() => document.getElementById(`pasillo-${s.id}`)?.scrollIntoView({ behavior: 'smooth' })}>
+            <span className="ic"><SectionIcon name={s.icon} size={22} strokeWidth={2.2} /></span>
+            <span><span className="t">{s.name}</span><span className="v plain">{s.count.toLocaleString('es-ES')}</span></span>
           </button>
         ))}
       </nav>
@@ -72,9 +82,9 @@ export function Home({ onOpen }: { onOpen: (p: Product) => void }) {
       {deals.length > 0 && (
         <section aria-labelledby="h-deals">
           <div className="row-head">
-            <h2 className="h-section" id="h-deals">Han bajado</h2>
-            <a href={href({ name: 'deals', kind: 'down' })} className="btn" style={{ minHeight: 44, textDecoration: 'none' }}>
-              Ver {deals.length} <ArrowRight size={18} />
+            <h2 className="h-section" id="h-deals"><span className="h-icon"><ArrowDown size={24} strokeWidth={2.6} /></span>Han bajado</h2>
+            <a href={href({ name: 'deals', kind: 'down' })} className="btn ghost">
+              Ver <span className="num">{deals.length}</span> <ChevronRight size={18} />
             </a>
           </div>
           <div className="deals">
@@ -91,9 +101,10 @@ export function Home({ onOpen }: { onOpen: (p: Product) => void }) {
 function HomeSkeleton() {
   return (
     <div aria-busy="true" aria-label="Cargando precios">
-      <div className="row-head"><div className="skeleton" style={{ width: 200, height: 36 }} /></div>
-      <div className="deals">{Array.from({ length: 4 }, (_, i) => <div key={i} className="skeleton" style={{ height: 290 }} />)}</div>
-      <div className="skeleton" style={{ height: 380, marginTop: 26 }} />
+      <div className="stats">{Array.from({ length: 3 }, (_, i) => <div key={i} className="skeleton" style={{ height: 72 }} />)}</div>
+      <div className="row-head"><div className="skeleton" style={{ width: 220, height: 40 }} /></div>
+      <div className="deals">{Array.from({ length: 4 }, (_, i) => <div key={i} className="skeleton" style={{ height: 300 }} />)}</div>
+      <div className="skeleton" style={{ height: 152, marginTop: 30 }} />
     </div>
   );
 }

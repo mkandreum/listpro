@@ -56,6 +56,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -137,35 +139,35 @@ fun BasketScreen(
             ScreenTitle("Tu cesta") {
                 if (lines.isNotEmpty()) {
                     if (confirmClear) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        BrutalButton("No", { confirmClear = false })
-                        BrutalButton("Vaciar", { onClear(); confirmClear = false }, danger = true)
-                    } else BrutalButton("Vaciar", { confirmClear = true }, leading = { Icon(Icons.Rounded.Delete, null, Modifier.size(18.dp)) })
+                        AppButton("No", { confirmClear = false })
+                        AppButton("Vaciar", { onClear(); confirmClear = false }, danger = true)
+                    } else AppButton("Vaciar", { confirmClear = true }, leading = { Icon(Icons.Rounded.Delete, null, Modifier.size(18.dp)) })
                 }
             }
         }
         if (lines.isEmpty() && missing == 0) {
             item {
                 EmptyState(Icons.Rounded.ShoppingBasket, "Tu cesta está vacía", "Entra en un pasillo y pulsa + en lo que necesites.") {
-                    BrutalButton("Ir a los pasillos", onGoShop, primary = true, modifier = Modifier.padding(top = 8.dp))
+                    AppButton("Ir a los pasillos", onGoShop, primary = true, modifier = Modifier.padding(top = 8.dp))
                 }
             }
         } else {
             item {
                 Column(
-                    Modifier.padding(top = 12.dp).fillMaxWidth().brutal(c.lime, c.line, c.shadow, radius = Brutal.radiusL, lift = 6.dp).padding(22.dp),
+                    Modifier.padding(top = 12.dp).fillMaxWidth().shadow(14.dp, RoundedCornerShape(Ui.radiusL), ambientColor = c.greenHi, spotColor = c.greenHi).clip(RoundedCornerShape(Ui.radiusL)).background(c.gradient).padding(22.dp),
                 ) {
-                    Text("${list.basket.values.sum()} unidades · ${lines.size} productos", style = MaterialTheme.typography.labelLarge, color = c.onLime)
-                    Price(total, Modifier.padding(vertical = 6.dp), size = 64, color = c.onLime)
+                    Text("${list.basket.values.sum()} unidades · ${lines.size} productos", style = MaterialTheme.typography.labelLarge, color = c.onGreen)
+                    Price(total, Modifier.padding(vertical = 8.dp), size = 60, color = Color.White)
                     val progress by animateFloatAsState(if (lines.isEmpty()) 0f else done.toFloat() / lines.size, label = "progress")
                     Box(
-                        Modifier.fillMaxWidth().height(14.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.55f)).border(2.dp, c.onLime, CircleShape)
+                        Modifier.fillMaxWidth().height(10.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.25f))
                             .semantics { stateDescription = "$done de ${lines.size} en el carro" },
                     ) {
-                        Box(Modifier.fillMaxHeight().fillMaxWidth(progress).background(c.onLime))
+                        Box(Modifier.fillMaxHeight().fillMaxWidth(progress).clip(CircleShape).background(Color.White))
                     }
                     Text(
                         if (done == lines.size) "¡Todo en el carro!" else "$done de ${lines.size} en el carro · marca lo que vas cogiendo",
-                        style = MaterialTheme.typography.labelMedium, color = c.onLime, modifier = Modifier.padding(top = 8.dp),
+                        style = MaterialTheme.typography.labelMedium, color = c.onGreen, modifier = Modifier.padding(top = 8.dp),
                     )
                 }
             }
@@ -183,7 +185,7 @@ fun BasketScreen(
                 val hue = hueColor(s?.hue ?: "#B9BCC4")
                 item(key = "band-$sectionId") {
                     Row(
-                        Modifier.padding(top = 22.dp, bottom = 2.dp).fillMaxWidth().brutal(hue, c.line, c.shadow, radius = 12.dp, lift = 0.dp, stroke = 2.dp).padding(horizontal = 14.dp, vertical = 8.dp),
+                        Modifier.padding(top = 22.dp, bottom = 2.dp).fillMaxWidth().card(hue, c.line, radius = 12.dp).padding(horizontal = 14.dp, vertical = 8.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
                         Text(s?.name ?: "Otros", style = MaterialTheme.typography.titleMedium, color = hue.ink())
@@ -202,9 +204,9 @@ fun BasketScreen(
                         singleLine = true,
                         textStyle = MaterialTheme.typography.bodyLarge.copy(color = c.ink),
                         cursorBrush = SolidColor(c.ink),
-                        modifier = Modifier.weight(1f).heightIn(min = 52.dp).brutal(c.surface, c.line, c.shadow, radius = 14.dp, lift = 0.dp).padding(horizontal = 16.dp, vertical = 15.dp),
+                        modifier = Modifier.weight(1f).heightIn(min = 52.dp).card(c.surface, c.line, radius = 14.dp).padding(horizontal = 16.dp, vertical = 15.dp),
                     )
-                    BrutalButton("Guardar", { if (name.isNotBlank() && onSave(name.trim())) name = defaultName }, primary = true)
+                    AppButton("Guardar", { if (name.isNotBlank() && onSave(name.trim())) name = defaultName }, primary = true)
                 }
                 Text("Guardar la cesta la vacía y la añade a tus gastos.", style = MaterialTheme.typography.bodySmall, color = c.ink2, modifier = Modifier.padding(top = 8.dp))
             }
@@ -226,14 +228,14 @@ fun BasketScreen(
 @Composable
 private fun Notice(up: Boolean, text: String, onClick: (() -> Unit)? = null) {
     val c = LocalColors.current
-    val tint = if (up) c.up else c.down
+    val tint = if (up) c.up else c.green
     Row(
         Modifier
             .padding(top = 14.dp)
             .fillMaxWidth()
-            .clip(RoundedCornerShape(Brutal.radiusS))
+            .clip(RoundedCornerShape(Ui.radiusS))
             .background(tint.copy(alpha = 0.16f).compositeOver(c.surface))
-            .border(2.dp, c.line, RoundedCornerShape(Brutal.radiusS))
+            .border(2.dp, c.line, RoundedCornerShape(Ui.radiusS))
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
             .padding(12.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -252,7 +254,7 @@ private fun BasketRow(l: BasketLine, done: Boolean, emoji: String, onQty: (Strin
         Modifier
             .padding(top = 10.dp)
             .fillMaxWidth()
-            .brutal(c.surface, c.line, c.shadow, lift = 0.dp, stroke = 2.dp)
+            .card(c.surface, c.line)
             .padding(start = 4.dp, end = 12.dp, top = 10.dp, bottom = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -262,9 +264,9 @@ private fun BasketRow(l: BasketLine, done: Boolean, emoji: String, onQty: (Strin
             contentAlignment = Alignment.Center,
         ) {
             Box(
-                Modifier.size(30.dp).clip(RoundedCornerShape(9.dp)).background(if (done) c.lime else c.surface).border(Brutal.stroke, c.line, RoundedCornerShape(9.dp)),
+                Modifier.size(30.dp).clip(RoundedCornerShape(9.dp)).background(if (done) c.green else c.surface).border(2.dp, if (done) c.green else c.lineStrong, RoundedCornerShape(9.dp)),
                 contentAlignment = Alignment.Center,
-            ) { if (done) Icon(Icons.Rounded.Check, null, tint = c.onLime, modifier = Modifier.size(20.dp)) }
+            ) { if (done) Icon(Icons.Rounded.Check, null, tint = Color.White, modifier = Modifier.size(20.dp)) }
         }
         Box(
             Modifier.size(64.dp).clip(RoundedCornerShape(12.dp)).background(Color.White).border(1.5.dp, c.line, RoundedCornerShape(12.dp)).clickable(onClickLabel = "Ver ${p.name}") { onProduct(p) },
@@ -290,7 +292,7 @@ private fun SavedRow(b: SavedBasket, idx: CatalogIndex?, onReuse: (String) -> Un
     val now = b.items.entries.sumOf { (id, q) -> (idx?.products?.get(id)?.price ?: 0.0) * q }
     val diff = now - b.total
     val rotation by animateFloatAsState(if (open) 90f else 0f, label = "chev")
-    Column(Modifier.padding(top = 12.dp).fillMaxWidth().brutal(c.surface, c.line, c.shadow, lift = 3.dp).animateContentSize()) {
+    Column(Modifier.padding(top = 12.dp).fillMaxWidth().card(c.surface, c.line).animateContentSize()) {
         Row(
             Modifier.fillMaxWidth().clickable(onClickLabel = if (open) "Cerrar" else "Abrir") { open = !open }.padding(horizontal = 16.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -312,8 +314,8 @@ private fun SavedRow(b: SavedBasket, idx: CatalogIndex?, onReuse: (String) -> Un
                     }
                 }
                 Row(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    BrutalButton("Repetir compra", { onReuse(b.id) }, primary = true, leading = { Icon(Icons.Rounded.Replay, null, Modifier.size(18.dp)) })
-                    BrutalButton("Borrar", { onDelete(b.id) }, danger = true, leading = { Icon(Icons.Rounded.Delete, null, Modifier.size(18.dp)) })
+                    AppButton("Repetir compra", { onReuse(b.id) }, primary = true, leading = { Icon(Icons.Rounded.Replay, null, Modifier.size(18.dp)) })
+                    AppButton("Borrar", { onDelete(b.id) }, danger = true, leading = { Icon(Icons.Rounded.Delete, null, Modifier.size(18.dp)) })
                 }
             }
         }
@@ -331,7 +333,7 @@ fun StatsScreen(idx: CatalogIndex?, saved: List<SavedBasket>, onGoBasket: () -> 
         if (saved.isEmpty()) {
             item {
                 EmptyState(Icons.Rounded.BarChart, "Aún no hay compras guardadas", "Guarda tu cesta después de comprar y aquí verás cuánto gastas cada mes y en qué.") {
-                    BrutalButton("Ir a la cesta", onGoBasket, primary = true, modifier = Modifier.padding(top = 8.dp))
+                    AppButton("Ir a la cesta", onGoBasket, primary = true, modifier = Modifier.padding(top = 8.dp))
                 }
             }
             return@LazyColumn
@@ -369,7 +371,7 @@ fun StatsScreen(idx: CatalogIndex?, saved: List<SavedBasket>, onGoBasket: () -> 
                                 Box(
                                     Modifier.padding(vertical = 6.dp).fillMaxWidth().fillMaxHeight((v / max).toFloat().coerceAtLeast(0.02f) * 0.78f)
                                         .clip(RoundedCornerShape(topStart = 10.dp, topEnd = 10.dp, bottomStart = 4.dp, bottomEnd = 4.dp))
-                                        .background(if (m == months.last()) c.ink else c.lime)
+                                        .background(if (m == months.last()) c.ink else c.green)
                                         .border(2.dp, c.line, RoundedCornerShape(topStart = 10.dp, topEnd = 10.dp, bottomStart = 4.dp, bottomEnd = 4.dp)),
                                 )
                                 Text(m.format(DateTimeFormatter.ofPattern("MMM", es)), style = MaterialTheme.typography.labelSmall, color = c.ink2)
@@ -384,7 +386,7 @@ fun StatsScreen(idx: CatalogIndex?, saved: List<SavedBasket>, onGoBasket: () -> 
                 Column {
                     Text("¿En qué se va el dinero?", style = MaterialTheme.typography.titleLarge, color = c.ink)
                     val rows = bySection.entries.sortedByDescending { it.value }
-                    Row(Modifier.padding(top = 14.dp).fillMaxWidth().height(34.dp).clip(RoundedCornerShape(12.dp)).border(Brutal.stroke, c.line, RoundedCornerShape(12.dp))) {
+                    Row(Modifier.padding(top = 14.dp).fillMaxWidth().height(34.dp).clip(RoundedCornerShape(12.dp)).border(Ui.hairline, c.line, RoundedCornerShape(12.dp))) {
                         rows.forEach { (id, v) ->
                             Box(Modifier.weight((v / secTotal).toFloat().coerceAtLeast(0.001f)).fillMaxHeight().background(hueColor(idx?.sections?.get(id)?.hue ?: "#B9BCC4")))
                         }
@@ -458,14 +460,14 @@ fun SettingsScreen(
                         Text("Este código une tu cesta en la app, en la web y en los móviles de tu casa.", style = MaterialTheme.typography.bodyLarge, color = c.ink2)
                         Text(
                             sync.code, textAlign = TextAlign.Center,
-                            style = MaterialTheme.typography.displayMedium.copy(letterSpacing = 6.sp), color = c.onLime,
-                            modifier = Modifier.fillMaxWidth().brutal(c.lime, c.line, c.shadow, lift = 0.dp).padding(vertical = 14.dp),
+                            style = TextStyle(fontFamily = Numeric, fontWeight = FontWeight.Bold, fontSize = 34.sp, letterSpacing = 6.sp), color = c.greenInk,
+                            modifier = Modifier.fillMaxWidth().card(c.greenSoft, c.greenHi.copy(alpha = 0.4f)).padding(vertical = 14.dp),
                         )
-                        BrutalButton("Copiar código", { onCopy(sync.code) }, Modifier.fillMaxWidth(), leading = { Icon(Icons.Rounded.ContentCopy, null, Modifier.size(18.dp)) })
-                        BrutalButton("Desvincular este dispositivo", onLeave, Modifier.fillMaxWidth(), danger = true, leading = { Icon(Icons.Rounded.LinkOff, null, Modifier.size(18.dp)) })
+                        AppButton("Copiar código", { onCopy(sync.code) }, Modifier.fillMaxWidth(), leading = { Icon(Icons.Rounded.ContentCopy, null, Modifier.size(18.dp)) })
+                        AppButton("Desvincular este dispositivo", onLeave, Modifier.fillMaxWidth(), danger = true, leading = { Icon(Icons.Rounded.LinkOff, null, Modifier.size(18.dp)) })
                     } else {
                         Text("Crea un código y escríbelo en otro móvil u ordenador para compartir la misma cesta.", style = MaterialTheme.typography.bodyLarge, color = c.ink2)
-                        BrutalButton("Crear código", onCreateSync, Modifier.fillMaxWidth(), primary = true, leading = { Icon(Icons.Rounded.Smartphone, null, Modifier.size(18.dp)) })
+                        AppButton("Crear código", onCreateSync, Modifier.fillMaxWidth(), primary = true, leading = { Icon(Icons.Rounded.Smartphone, null, Modifier.size(18.dp)) })
                         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                             BasicTextField(
                                 value = code,
@@ -475,17 +477,17 @@ fun SettingsScreen(
                                 cursorBrush = SolidColor(c.ink),
                                 keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters),
                                 decorationBox = { inner -> Box { if (code.isEmpty()) Text("Código de 8 caracteres", color = c.ink2, style = MaterialTheme.typography.bodyLarge); inner() } },
-                                modifier = Modifier.weight(1f).heightIn(min = 52.dp).brutal(c.surface, c.line, c.shadow, radius = 14.dp, lift = 0.dp).padding(horizontal = 16.dp, vertical = 15.dp),
+                                modifier = Modifier.weight(1f).heightIn(min = 52.dp).card(c.surface, c.line, radius = 14.dp).padding(horizontal = 16.dp, vertical = 15.dp),
                             )
-                            BrutalButton("Unirme", { onJoin(code) }, enabled = code.length == 8)
+                            AppButton("Unirme", { onJoin(code) }, enabled = code.length == 8)
                         }
                     }
                     if (nfcAvailable) {
                         Spacer(Modifier.height(4.dp))
                         Text("Acercando los móviles (NFC)", style = MaterialTheme.typography.titleMedium, color = c.ink)
                         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            BrutalButton("Enviar", onNfcShare, Modifier.weight(1f), leading = { Icon(Icons.Rounded.Nfc, null, Modifier.size(18.dp)) })
-                            BrutalButton(if (nfcListening) "Esperando…" else "Recibir", { onNfcReceive(!nfcListening) }, Modifier.weight(1f), primary = nfcListening, leading = { Icon(Icons.Rounded.Nfc, null, Modifier.size(18.dp)) })
+                            AppButton("Enviar", onNfcShare, Modifier.weight(1f), leading = { Icon(Icons.Rounded.Nfc, null, Modifier.size(18.dp)) })
+                            AppButton(if (nfcListening) "Esperando…" else "Recibir", { onNfcReceive(!nfcListening) }, Modifier.weight(1f), primary = nfcListening, leading = { Icon(Icons.Rounded.Nfc, null, Modifier.size(18.dp)) })
                         }
                         if (nfcListening) Text("Acerca la parte trasera de este móvil al que tiene la lista y pulsa Enviar en él.", style = MaterialTheme.typography.bodyMedium, color = c.ink2)
                     }
@@ -496,7 +498,7 @@ fun SettingsScreen(
             Panel {
                 Column {
                     Text("Apariencia", style = MaterialTheme.typography.titleLarge, color = c.ink)
-                    Row(Modifier.padding(top = 12.dp).fillMaxWidth().clip(RoundedCornerShape(14.dp)).border(Brutal.stroke, c.line, RoundedCornerShape(14.dp))) {
+                    Row(Modifier.padding(top = 12.dp).fillMaxWidth().clip(RoundedCornerShape(14.dp)).border(Ui.hairline, c.line, RoundedCornerShape(14.dp))) {
                         listOf(ThemePref.System to "Automático", ThemePref.Light to "Claro", ThemePref.Dark to "Oscuro").forEachIndexed { i, (t, label) ->
                             if (i > 0) Box(Modifier.width(2.dp).height(48.dp).background(c.line))
                             Box(
@@ -516,7 +518,7 @@ fun SettingsScreen(
                     Kv("Precios", freshness(idx?.catalog?.updatedAt))
                     Kv("Zona de precios", if (idx?.catalog?.warehouse == "mad1") "Madrid" else idx?.catalog?.warehouse ?: "—")
                     Text("Los precios se descargan cada mañana de la tienda online de Mercadona. ListPro no está afiliada a Mercadona.", style = MaterialTheme.typography.bodySmall, color = c.ink2, modifier = Modifier.padding(vertical = 8.dp))
-                    BrutalButton("Comprobar ahora", onRefresh, Modifier.fillMaxWidth(), leading = { Icon(Icons.Rounded.Refresh, null, Modifier.size(18.dp)) })
+                    AppButton("Comprobar ahora", onRefresh, Modifier.fillMaxWidth(), leading = { Icon(Icons.Rounded.Refresh, null, Modifier.size(18.dp)) })
                 }
             }
         }
@@ -524,8 +526,8 @@ fun SettingsScreen(
             Panel {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text("Copia de seguridad", style = MaterialTheme.typography.titleLarge, color = c.ink)
-                    BrutalButton("Guardar copia", onExport, Modifier.fillMaxWidth(), leading = { Icon(Icons.Rounded.Download, null, Modifier.size(18.dp)) })
-                    BrutalButton("Restaurar copia", onImport, Modifier.fillMaxWidth(), leading = { Icon(Icons.Rounded.Upload, null, Modifier.size(18.dp)) })
+                    AppButton("Guardar copia", onExport, Modifier.fillMaxWidth(), leading = { Icon(Icons.Rounded.Download, null, Modifier.size(18.dp)) })
+                    AppButton("Restaurar copia", onImport, Modifier.fillMaxWidth(), leading = { Icon(Icons.Rounded.Upload, null, Modifier.size(18.dp)) })
                 }
             }
         }

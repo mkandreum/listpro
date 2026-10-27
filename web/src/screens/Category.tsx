@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronLeft } from 'lucide-react';
-import { inkOn, money } from '../lib';
+import { money } from '../lib';
+import { SectionIcon } from '../components/SectionIcon';
 import { href } from '../router';
 import { useStore } from '../store';
 import type { Product } from '../types';
@@ -54,25 +55,24 @@ export function CategoryScreen({ id, sub, onOpen }: { id: number; sub?: number; 
     return <Empty icon={<ChevronLeft />} title="Esta categoría ya no existe"><a className="btn" href="#/">Volver a los pasillos</a></Empty>;
   }
 
-  const hueStyle = { '--hue': section.hue, '--on-hue': inkOn(section.hue) } as React.CSSProperties;
+  const hueStyle = { '--hue': section.hue } as React.CSSProperties;
 
   return (
     <>
       <header className="cat-hero" style={hueStyle}>
-        <div className="crumbs">
-          <a className="back" href={href({ name: 'home' })} style={{ textDecoration: 'none' }} onClick={(e) => { if (history.length > 1) { e.preventDefault(); history.back(); } }}>
-            <ChevronLeft size={20} strokeWidth={3} /> {section.name}
-          </a>
-        </div>
-        <div className="cat-hero-body">
-          <div>
-            <h1 className="h-display">{cat.name}</h1>
-            <p style={{ fontWeight: 700, marginTop: 10 }} className="num">
-              {cat.count} productos{cheapest ? ` · desde ${money(cheapest.price)}` : ''}
-            </p>
+        <div className="banner">
+          <div className="banner-copy">
+            <a className="back" href={href({ name: 'home' })} onClick={(e) => { if (history.length > 1) { e.preventDefault(); history.back(); } }}>
+              <ChevronLeft size={20} strokeWidth={2.4} /> {section.name}
+            </a>
+            <div className="banner-title">
+              <span className="h-icon"><SectionIcon name={section.icon} size={22} strokeWidth={2.2} /></span>
+              <h1>{cat.name}</h1>
+            </div>
+            <p className="facts num">{cat.count} productos{cheapest ? ` · desde ${money(cheapest.price)}` : ''}</p>
           </div>
-          <div className="hero-stickers" aria-hidden>
-            {cat.images.map((src) => <img key={src} className="sticker" src={src} alt="" />)}
+          <div className="collage" aria-hidden>
+            {cat.images.map((src) => <img key={src} src={src} alt="" />)}
           </div>
         </div>
       </header>
