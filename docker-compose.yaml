@@ -1,0 +1,33 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    restart: always
+    expose:
+      - "3000"
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DB_PATH: /data/listpro.db
+      # Almacén de precios de Mercadona: mad1 Madrid, bcn1 Barcelona, vlc1 Valencia, svq1 Sevilla…
+      MERCADONA_WH: ${MERCADONA_WH:-mad1}
+      # Hora (Madrid) de la actualización diaria de precios
+      SCRAPE_HOUR: ${SCRAPE_HOUR:-6}
+      # Para forzar una actualización con POST /api/admin/refresh
+      ADMIN_TOKEN: ${ADMIN_TOKEN:-}
+    volumes:
+      - listpro_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:3000/api/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+
+volumes:
+  listpro_data:

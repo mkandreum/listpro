@@ -1,0 +1,19 @@
+{
+  "name": "listpro-server",
+  "private": true,
+  "version": "2.0.0",
+  "description": "ListPro: catálogo de Mercadona siempre actualizado + API para la web y la app Android.",
+  "type": "module",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "start": "node --disable-warning=ExperimentalWarning src/index.js",
+    "dev": "node --disable-warning=ExperimentalWarning --watch --env-file-if-exists=.env src/index.js",
+    "scrape": "node --disable-warning=ExperimentalWarning --env-file-if-exists=.env src/scrape-cli.js"
+  },
+  "dependencies": {
+    "compression": "^1.7.5",
+    "express": "^4.21.2"
+  }
+}

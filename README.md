@@ -1,46 +1,66 @@
 <div align="center">
 
-# 🛒 ListPro
+# 🛒 ListPro 2.0
 
-**Catálogo de productos y lista de la compra, 100 % offline**
+**La lista de la compra con los precios de Mercadona actualizados cada día**
 
 *Un producto de [Xyon Platforms](https://github.com/mkandreum)*
-
-![Kotlin](https://img.shields.io/badge/Kotlin-7F52FF?style=flat&logo=kotlin&logoColor=white)
-![Android](https://img.shields.io/badge/Android-3DDC84?style=flat&logo=android&logoColor=white)
-![WebView](https://img.shields.io/badge/WebView-4285F4?style=flat&logo=googlechrome&logoColor=white)
 
 </div>
 
 ---
 
-## ¿Qué es ListPro?
+ListPro 2.0 son tres piezas conectadas que comparten catálogo, categorías y cesta:
 
-ListPro es una app Android que monta un catálogo de productos sobre una WebView con una interfaz web propia (`assets/index.html`). El catálogo se sirve desde un CSV empaquetado en la app y se entrega a la interfaz por trozos mediante un puente JavaScript, de modo que se navegaba sin bloquear la UI aunque el catálogo tenga cientos de productos. Sin servidores: todo vive en el dispositivo.
+| Pieza | Carpeta | Stack |
+|---|---|---|
+| Servidor + scraper | `server/` | Node 22, Express, SQLite (`node:sqlite`) |
+| Web | `web/` | React 18 + Vite + TypeScript |
+| App Android | `android/` | Kotlin, Jetpack Compose, Material 3, OkHttp, Coil, WorkManager |
 
-## ✨ Funcionalidades
+## Cómo funciona
 
-- **Catálogo completo**: `products_macro.csv` con id, categoría, nombre, marca, precio e imagen de cada producto
-- **Carga por trozos**: el WebView pide productos en páginas (`getProductChunk`) y la app los convierte a JSON
-- **Interfaz rica**: tema propio, tipografía Poppins y gráficas con Chart.js
-- **Compartir por NFC**: un móvil emula una tarjeta NFC (Host Card Emulation) con el contenido y el otro la lee para unirse
-- **Copias de seguridad**: guarda el estado en `listpro_backup.json` y restáuralo desde un archivo
-- **100 % offline**: el catálogo y la interfaz van dentro del APK
+1. **Scraper diario** (`server/src/scraper.js`): recorre la API pública de `tienda.mercadona.es` (26 categorías → ~150 subcategorías → grupos), guarda ~4.300 productos en SQLite con precio, €/kg, foto y enlace, y registra un **histórico de cambios de precio**. Se ejecuta al arrancar si el catálogo tiene más de 20 h y cada día a las `SCRAPE_HOUR` (hora de Madrid). Si una pasada trae un catálogo anómalo (menos de 500 productos o una caída del 40 %), no machaca el bueno.
+2. **Categorías mejoradas** (`server/src/taxonomy.js`): se agrupan por ID (no por palabras clave, que fallaban: "sal" casaba con "salsas") en 9 pasillos de compra, cada uno con su color, y cada categoría lleva fotos reales de sus productos.
+3. **API** (`server/src/index.js`):
+   - `GET /api/catalog` — catálogo completo comprimido (~260 KB gzip) con ETag.
+   - `GET /api/catalog/meta` — versión, para saber si hay precios nuevos.
+   - `GET /api/products/:id/history` — historial de precio.
+   - `POST/GET/PUT /api/lists/:code` — lista compartida por código de 8 caracteres (web ↔ Android ↔ familia).
+   - `POST /api/admin/refresh` — fuerza una actualización (`Authorization: Bearer $ADMIN_TOKEN`).
+4. **Web y Android** consumen la misma API: pasillos a color, bajadas de precio, búsqueda, cesta ordenada por pasillos con casillas "en el carro", aviso si un precio cambió desde que lo añadiste, cestas guardadas, gastos y sincronización. Android además comparte la lista **por NFC** acercando dos móviles y refresca los precios en segundo plano.
 
-## 🛠️ Stack técnico
+## Puesta en marcha
 
-| Capa | Tecnología |
-|------|----------|
-| Lenguaje | Kotlin (interfaz nativa mínima) |
-| Interfaz | WebView + puente `@JavascriptInterface` (`Android`) |
-| Datos | CSV empaquetado en `assets/` parseado a JSON |
-| NFC | `HostApduService` (AID `F0010203040506`) con respuesta NDEF de texto |
-| Gráficos | Chart.js (CDN) |
-| Licencia | Google Play License Check (pairip) |
+```bash
+cd web && npm install && npm run build      # genera server/public
+cd ../server && npm install && npm run scrape && npm start
+```
 
-minSdk 27, targetSdk 36.
+Desarrollo de la web con recarga: `npm start` en `server/` (puerto 3000) y `npm run dev` en `web/`.
 
-## 📁 Estructura del repositorio
+App Android contra un servidor local en el emulador:
+
+```bash
+cd android && ./gradlew assembleDebug -PapiBase=http://10.0.2.2:3000
+```
+
+Por defecto la app apunta a `https://listpro.xyoncloud.win`. La firma de release se lee de `~/.android-keys/listpro-keystore.properties`.
+
+## Desplegar en Coolify
+
+1. En Coolify, crea un recurso nuevo: *Private Repository (GitHub App)* → `mkandreum/listpro`, rama `main`, Build Pack **Docker Compose** (`docker-compose.yaml`).
+2. Variables de entorno (todas opcionales): `MERCADONA_WH` (por defecto `mad1`), `SCRAPE_HOUR` (por defecto `6`), `ADMIN_TOKEN`.
+3. Asigna el dominio `listpro.xyoncloud.win` al servicio `app`, puerto **3000**.
+4. Lanza **Deploy**. Al arrancar con la base de datos vacía descarga el catálogo (~1,5 min); después se actualiza cada mañana. La base de datos vive en el volumen `listpro_data` y sobrevive a los redespliegues.
+
+Con el recurso creado y *Auto Deploy* activo, cada push a `main` se redespliega solo.
+
+En local: `docker compose up -d --build`.
+
+> ListPro no está afiliada a Mercadona. Los precios se leen de su tienda online pública una vez al día.
+
+## 🗄️ Versión 1.0 (APK descompilado)
 
 Repositorio de **análisis** del APK descompilado, no del proyecto Android original:
 

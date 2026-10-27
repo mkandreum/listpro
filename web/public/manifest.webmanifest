@@ -1,0 +1,11 @@
+{
+  "name": "ListPro",
+  "short_name": "ListPro",
+  "description": "Tu lista de la compra con los precios de Mercadona siempre actualizados.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F3F4F1",
+  "theme_color": "#F3F4F1",
+  "lang": "es",
+  "icons": [{ "src": "/icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}

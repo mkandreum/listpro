@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.NFC" />
+    <uses-feature android:name="android.hardware.nfc" android:required="false" />
+    <uses-feature android:name="android.hardware.nfc.hce" android:required="false" />
+
+    <application
+        android:name=".ListProApp"
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher"
+        android:label="ListPro"
+        android:supportsRtl="true"
+        android:enableOnBackInvokedCallback="true"
+        android:usesCleartextTraffic="${cleartext}"
+        android:theme="@style/Theme.ListPro.Splash">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- Compartir la lista acercando dos móviles: este móvil hace de tarjeta con el código de sincronización -->
+        <service
+            android:name=".nfc.ListHceService"
+            android:exported="true"
+            android:permission="android.permission.BIND_NFC_SERVICE">
+            <intent-filter>
+                <action android:name="android.nfc.cardemulation.action.HOST_APDU_SERVICE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.nfc.cardemulation.host_apdu_service"
+                android:resource="@xml/apduservice" />
+        </service>
+
+        <!-- WorkManager se inicializa a mano en ListProApp -->
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:authorities="${applicationId}.androidx-startup"
+            android:exported="false"
+            tools:node="merge">
+            <meta-data
+                android:name="androidx.work.WorkManagerInitializer"
+                android:value="androidx.startup"
+                tools:node="remove" />
+        </provider>
+    </application>
+</manifest>
