@@ -6,6 +6,8 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -107,6 +109,7 @@ fun AppButton(
     val source = remember { MutableInteractionSource() }
     val pressed by source.collectIsPressedAsState()
     val scale by animateFloatAsState(if (pressed) 0.97f else 1f, label = "press")
+    val haptics = rememberHaptics()
     val shape = RoundedCornerShape(if (ghost) 999.dp else 16.dp)
     val fg = when { primary -> c.onGreen; danger -> c.up; ghost -> c.greenInk; else -> c.ink }
     Row(
@@ -121,7 +124,7 @@ fun AppButton(
                     else -> Modifier.background(c.surface).border(Ui.hairline, c.lineStrong, shape)
                 },
             )
-            .clickable(source, indication = null, enabled = enabled, role = Role.Button, onClick = onClick)
+            .clickable(source, indication = null, enabled = enabled, role = Role.Button) { if (danger) haptics.warn() else haptics.tap(); onClick() }
             .defaultMinSize(minHeight = 48.dp)
             .padding(horizontal = 18.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -186,6 +189,7 @@ fun ProductImage(url: String?, fallback: String, modifier: Modifier = Modifier) 
 @Composable
 fun QtyControl(qty: Int, name: String, onChange: (Int) -> Unit, modifier: Modifier = Modifier) {
     val c = LocalColors.current
+    val haptics = rememberHaptics()
     AnimatedContent(
         targetState = qty > 0,
         transitionSpec = { (scaleIn(spring(dampingRatio = 0.7f), initialScale = 0.8f) + fadeIn()) togetherWith fadeOut() },
@@ -199,7 +203,7 @@ fun QtyControl(qty: Int, name: String, onChange: (Int) -> Unit, modifier: Modifi
                     .shadow(8.dp, CircleShape, ambientColor = c.greenHi, spotColor = c.greenHi)
                     .clip(CircleShape)
                     .background(c.gradient)
-                    .clickable(role = Role.Button) { onChange(1) }
+                    .clickable(role = Role.Button) { haptics.add(); onChange(1) }
                     .semantics { contentDescription = "Añadir $name a la cesta" },
                 contentAlignment = Alignment.Center,
             ) { Icon(Icons.Rounded.Add, null, tint = Color.White, modifier = Modifier.size(26.dp)) }
@@ -209,12 +213,22 @@ fun QtyControl(qty: Int, name: String, onChange: (Int) -> Unit, modifier: Modifi
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Box(
-                    Modifier.size(width = 36.dp, height = 48.dp).clickable(role = Role.Button) { onChange(-1) }.semantics { contentDescription = "Quitar uno" },
+                    Modifier.size(width = 36.dp, height = 48.dp).clickable(role = Role.Button) { haptics.remove(); onChange(-1) }.semantics { contentDescription = "Quitar uno" },
                     contentAlignment = Alignment.Center,
                 ) { Icon(Icons.Rounded.Remove, null, tint = c.greenInk) }
-                Text("$qty", color = c.ink, style = TextStyle(fontFamily = Numeric, fontWeight = FontWeight.Bold, fontSize = 16.sp), modifier = Modifier.width(20.dp), textAlign = TextAlign.Center)
+                // La cifra rueda hacia arriba al sumar y hacia abajo al restar
+                AnimatedContent(
+                    targetState = qty,
+                    transitionSpec = {
+                        val up = targetState > initialState
+                        (slideInVertically { if (up) it else -it } + fadeIn()) togetherWith (slideOutVertically { if (up) -it else it } + fadeOut())
+                    },
+                    label = "count",
+                ) { n ->
+                    Text("$n", color = c.ink, style = TextStyle(fontFamily = Numeric, fontWeight = FontWeight.Bold, fontSize = 16.sp), modifier = Modifier.width(20.dp), textAlign = TextAlign.Center)
+                }
                 Box(
-                    Modifier.size(width = 36.dp, height = 48.dp).clickable(role = Role.Button) { onChange(1) }.semantics { contentDescription = "Añadir uno" },
+                    Modifier.size(width = 36.dp, height = 48.dp).clickable(role = Role.Button) { haptics.add(); onChange(1) }.semantics { contentDescription = "Añadir uno" },
                     contentAlignment = Alignment.Center,
                 ) { Icon(Icons.Rounded.Add, null, tint = c.greenInk) }
             }
@@ -224,19 +238,23 @@ fun QtyControl(qty: Int, name: String, onChange: (Int) -> Unit, modifier: Modifi
 
 /** Tarjeta de producto: foto en su pozo blanco, nombre, formato, precio y botón de añadir. */
 @Composable
-fun ProductTag(p: Product, qty: Int, emoji: String, onQty: (Int) -> Unit, onOpen: () -> Unit, modifier: Modifier = Modifier) {
+fun ProductTag(p: Product, qty: Int, emoji: String, onQty: (Int) -> Unit, onOpen: () -> Unit, modifier: Modifier = Modifier, index: Int = 99) {
     val c = LocalColors.current
+    val haptics = rememberHaptics()
+    val source = remember { MutableInteractionSource() }
     val drop = (p.delta ?: 0.0) < 0
     val shape = RoundedCornerShape(Ui.radiusL)
     Column(
         modifier
+            .appear(index)
+            .pressScale(source)
             .fillMaxWidth()
             .raised(Ui.radiusL)
             .then(if (qty > 0) Modifier.border(2.dp, c.greenHi.copy(alpha = 0.75f), shape) else Modifier)
             .padding(10.dp),
     ) {
         Box(
-            Modifier.fillMaxWidth().aspectRatio(1.12f).clip(RoundedCornerShape(18.dp)).background(Color.White).clickable(onClickLabel = "Ver detalle", onClick = onOpen),
+            Modifier.fillMaxWidth().aspectRatio(1.12f).clip(RoundedCornerShape(18.dp)).background(Color.White).clickable(source, indication = null, onClickLabel = "Ver detalle") { haptics.tick(); onOpen() },
             contentAlignment = Alignment.Center,
         ) {
             ProductImage(p.image, emoji, Modifier.fillMaxSize().padding(16.dp))
@@ -265,13 +283,14 @@ fun ProductTag(p: Product, qty: Int, emoji: String, onQty: (Int) -> Unit, onOpen
 @Composable
 fun Chip(selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier, leading: (@Composable () -> Unit)? = null, content: @Composable RowScope.() -> Unit) {
     val c = LocalColors.current
+    val haptics = rememberHaptics()
     Row(
         modifier
             .heightIn(min = 44.dp)
             .clip(CircleShape)
             .background(if (selected) c.green else c.surface)
             .border(Ui.hairline, if (selected) Color.Transparent else c.lineStrong, CircleShape)
-            .clickable(role = Role.Tab, onClick = onClick)
+            .clickable(role = Role.Tab) { haptics.tick(); onClick() }
             .padding(start = if (leading != null) 6.dp else 16.dp, end = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -299,9 +318,9 @@ fun Stickers(images: List<String>, modifier: Modifier = Modifier, size: Dp = 62.
                     .size(size)
                     .rotate(angles[i])
                     .offset(y = if (i == 1) (-6).dp else 0.dp)
-                    .shadow(6.dp, RoundedCornerShape(16.dp))
                     .clip(RoundedCornerShape(16.dp))
                     .background(Color.White)
+                    .border(Ui.hairline, Color(0x1A0C1714), RoundedCornerShape(16.dp))
                     .padding(5.dp),
             ) { ProductImage(url, "", Modifier.fillMaxSize()) }
         }

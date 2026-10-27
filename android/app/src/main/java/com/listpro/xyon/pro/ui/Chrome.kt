@@ -47,6 +47,11 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.animation.core.Animatable
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -88,6 +93,17 @@ private val NAV = listOf(
 fun GlassPillNav(selected: Tab, basketCount: Int, onSelect: (Tab) -> Unit, modifier: Modifier = Modifier) {
     val c = LocalColors.current
     val index = NAV.indexOfFirst { it.tab == selected }.coerceAtLeast(0)
+    val haptics = rememberHaptics()
+    // El contador de la cesta da un salto cada vez que entra algo
+    val bump = remember { Animatable(1f) }
+    var lastCount by remember { mutableIntStateOf(basketCount) }
+    LaunchedEffect(basketCount) {
+        if (basketCount > lastCount) {
+            bump.snapTo(1.35f)
+            bump.animateTo(1f, spring(dampingRatio = 0.4f, stiffness = 500f))
+        }
+        lastCount = basketCount
+    }
     BoxWithConstraints(
         modifier
             .navigationBarsPadding()
@@ -125,7 +141,7 @@ fun GlassPillNav(selected: Tab, basketCount: Int, onSelect: (Tab) -> Unit, modif
                         .weight(1f)
                         .fillMaxHeight()
                         .clip(CircleShape)
-                        .selectable(active, onClick = { onSelect(item.tab) }, role = Role.Tab, interactionSource = remember { MutableInteractionSource() }, indication = null),
+                        .selectable(active, onClick = { if (!active) haptics.tap(); onSelect(item.tab) }, role = Role.Tab, interactionSource = remember { MutableInteractionSource() }, indication = null),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center,
                 ) {
@@ -136,6 +152,7 @@ fun GlassPillNav(selected: Tab, basketCount: Int, onSelect: (Tab) -> Unit, modif
                                 Modifier
                                     .align(Alignment.TopEnd)
                                     .offset(x = 14.dp, y = (-8).dp)
+                                    .graphicsLayer { scaleX = bump.value; scaleY = bump.value }
                                     .height(22.dp)
                                     .widthIn(min = 22.dp)
                                     .clip(CircleShape)

@@ -2,6 +2,8 @@ import { memo, useState } from 'react';
 import { ArrowDown, ArrowUp, Minus, Plus, Sparkles } from 'lucide-react';
 import { money, priceDelta, splitPrice } from '../lib';
 import { changeQty, useStore } from '../store';
+import { haptic } from '../fx/haptics';
+import { flyToBasket } from '../fx/motion';
 import type { Product } from '../types';
 
 export function Price({ value, className = 'price' }: { value: number; className?: string }) {
@@ -30,16 +32,16 @@ export function QtyControl({ id, name }: { id: string; name: string }) {
   const qty = useStore((s) => s.basket[id] ?? 0);
   if (!qty) {
     return (
-      <button className="add" onClick={() => changeQty(id, 1)} aria-label={`Añadir ${name} a la cesta`}>
+      <button className="add" onClick={(e) => { haptic.add(); flyToBasket(e.currentTarget); changeQty(id, 1); }} aria-label={`Añadir ${name} a la cesta`}>
         <Plus size={24} strokeWidth={2.6} />
       </button>
     );
   }
   return (
     <div className="stepper" role="group" aria-label={`Cantidad de ${name}`}>
-      <button onClick={() => changeQty(id, -1)} aria-label="Quitar uno"><Minus size={18} strokeWidth={3} /></button>
-      <output aria-live="polite">{qty}</output>
-      <button onClick={() => changeQty(id, 1)} aria-label="Añadir uno"><Plus size={18} strokeWidth={3} /></button>
+      <button onClick={() => { haptic.remove(); changeQty(id, -1); }} aria-label="Quitar uno"><Minus size={18} strokeWidth={3} /></button>
+      <output aria-live="polite" key={qty} className="roll">{qty}</output>
+      <button onClick={(e) => { haptic.add(); flyToBasket(e.currentTarget); changeQty(id, 1); }} aria-label="Añadir uno"><Plus size={18} strokeWidth={3} /></button>
     </div>
   );
 }
@@ -48,15 +50,17 @@ interface TagProps {
   p: Product;
   onOpen: (p: Product) => void;
   className?: string;
+  /** Posición en la lista para escalonar la entrada (solo las primeras animan). */
+  index?: number;
 }
 
-export const ProductTag = memo(function ProductTag({ p, onOpen, className = '' }: TagProps) {
+export const ProductTag = memo(function ProductTag({ p, onOpen, className = '', index = 0 }: TagProps) {
   const inBasket = useStore((s) => (s.basket[p.id] ?? 0) > 0);
   const d = priceDelta(p);
   return (
-    <article className={`tag ${inBasket ? 'in-basket' : ''} ${className}`}>
+    <article className={`tag ${inBasket ? 'in-basket' : ''} ${className}`} style={{ '--d': Math.min(index, 8) } as React.CSSProperties}>
       <Seal p={p} />
-      <button className="tag-media" onClick={() => onOpen(p)} aria-label={`Ver detalle de ${p.name}`}>
+      <button className="tag-media" onClick={() => { haptic.tick(); onOpen(p); }} aria-label={`Ver detalle de ${p.name}`}>
         <ProductImage p={p} />
       </button>
       <div className="tag-body">

@@ -2,6 +2,7 @@ package com.listpro.xyon.pro.ui
 
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -157,7 +158,9 @@ fun BasketScreen(
                     Modifier.padding(top = 12.dp).fillMaxWidth().shadow(14.dp, RoundedCornerShape(Ui.radiusL), ambientColor = c.greenHi, spotColor = c.greenHi).clip(RoundedCornerShape(Ui.radiusL)).background(c.gradient).padding(22.dp),
                 ) {
                     Text("${list.basket.values.sum()} unidades · ${lines.size} productos", style = MaterialTheme.typography.labelLarge, color = c.onGreen)
-                    Price(total, Modifier.padding(vertical = 8.dp), size = 60, color = Color.White)
+                    // El total corre hasta su nuevo valor en lugar de saltar
+                    val shownTotal by animateFloatAsState(total.toFloat(), tween(450, easing = EaseOutExpo), label = "total")
+                    Price(shownTotal.toDouble(), Modifier.padding(vertical = 8.dp), size = 60, color = Color.White)
                     val progress by animateFloatAsState(if (lines.isEmpty()) 0f else done.toFloat() / lines.size, label = "progress")
                     Box(
                         Modifier.fillMaxWidth().height(10.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.25f))
@@ -193,7 +196,7 @@ fun BasketScreen(
                     }
                 }
                 items(ls, key = { it.product.id }) { l ->
-                    BasketRow(l, l.product.id in list.inCart, idx?.subcategories?.get(l.product.subcategory)?.emoji ?: "🛒", onQty, onToggle, onProduct)
+                    BasketRow(Modifier.animateItem(), l, l.product.id in list.inCart, idx?.subcategories?.get(l.product.subcategory)?.emoji ?: "🛒", onQty, onToggle, onProduct)
                 }
             }
             item {
@@ -246,12 +249,13 @@ private fun Notice(up: Boolean, text: String, onClick: (() -> Unit)? = null) {
 }
 
 @Composable
-private fun BasketRow(l: BasketLine, done: Boolean, emoji: String, onQty: (String, Int) -> Unit, onToggle: (String) -> Unit, onProduct: (Product) -> Unit) {
+private fun BasketRow(modifier: Modifier, l: BasketLine, done: Boolean, emoji: String, onQty: (String, Int) -> Unit, onToggle: (String) -> Unit, onProduct: (Product) -> Unit) {
     val c = LocalColors.current
+    val haptics = rememberHaptics()
     val p = l.product
     val alpha by animateFloatAsState(if (done) 0.5f else 1f, label = "done")
     Row(
-        Modifier
+        modifier
             .padding(top = 10.dp)
             .fillMaxWidth()
             .card(c.surface, c.line)
@@ -259,7 +263,7 @@ private fun BasketRow(l: BasketLine, done: Boolean, emoji: String, onQty: (Strin
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
-            Modifier.size(48.dp).clickable(role = Role.Checkbox, onClickLabel = if (done) "Quitar del carro" else "Marcar en el carro") { onToggle(p.id) }
+            Modifier.size(48.dp).clickable(role = Role.Checkbox, onClickLabel = if (done) "Quitar del carro" else "Marcar en el carro") { if (done) haptics.tick() else haptics.success(); onToggle(p.id) }
                 .semantics { stateDescription = if (done) "En el carro" else "Pendiente" },
             contentAlignment = Alignment.Center,
         ) {

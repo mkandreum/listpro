@@ -3,6 +3,7 @@ import { BarChart3, Clock3, Search, Settings, ShoppingBasket, SlidersHorizontal,
 import { freshnessLabel, units } from '../lib';
 import { href, navigate, type Route } from '../router';
 import { useStore } from '../store';
+import { haptic } from '../fx/haptics';
 
 export function TopBar() {
   const updatedAt = useStore((s) => s.catalog?.updatedAt);
@@ -80,7 +81,7 @@ export function NavBar({ current }: { current: Route['name'] }) {
     <nav className="nav glass" aria-label="Principal" style={{ '--i': active } as React.CSSProperties}>
       <span className="nav-pill" aria-hidden />
       {TABS.map(({ route, label, icon: Icon, match }) => (
-        <a key={label} href={href(route)} className="nav-item" style={{ textDecoration: 'none' }} aria-current={match.includes(current) ? 'page' : undefined}>
+        <a key={label} href={href(route)} className="nav-item" data-tab={route.name} onClick={() => haptic.tap()} aria-current={match.includes(current) ? 'page' : undefined}>
           <Icon size={23} strokeWidth={2.2} aria-hidden />
           {label}
           {route.name === 'basket' && count > 0 && (

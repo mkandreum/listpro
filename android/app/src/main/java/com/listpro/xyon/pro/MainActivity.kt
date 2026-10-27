@@ -17,6 +17,9 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import com.listpro.xyon.pro.ui.EaseOutExpo
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -107,6 +110,11 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+private fun depthOf(r: Route): Int = when (r) {
+    is Route.CategoryRoute, is Route.Search, is Route.Deals -> 1
+    else -> 0
+}
+
 @Composable
 private fun App(vm: AppViewModel, nfcAvailable: Boolean) {
     val c = LocalColors.current
@@ -151,7 +159,22 @@ private fun App(vm: AppViewModel, nfcAvailable: Boolean) {
     Box(Modifier.fillMaxSize().background(c.ground)) {
         AnimatedContent(
             targetState = route,
-            transitionSpec = { fadeIn(tween(180)) togetherWith fadeOut(tween(120)) },
+            // Entrar en algo desliza desde la derecha; volver, desde la izquierda; entre pestañas, según su orden
+            transitionSpec = {
+                val from = depthOf(initialState)
+                val to = depthOf(targetState)
+                val dir = when {
+                    to > from -> 1
+                    to < from -> -1
+                    else -> (targetState.tab().ordinal - initialState.tab().ordinal).coerceIn(-1, 1)
+                }
+                if (dir == 0) {
+                    fadeIn(tween(220)) togetherWith fadeOut(tween(120))
+                } else {
+                    (slideInHorizontally(tween(380, easing = EaseOutExpo)) { w -> dir * w / 5 } + fadeIn(tween(260)))
+                        .togetherWith(slideOutHorizontally(tween(380, easing = EaseOutExpo)) { w -> -dir * w / 8 } + fadeOut(tween(160)))
+                }
+            },
             // Escribir en el buscador cambia la ruta, pero no debe animar ni recrear la pantalla
             contentKey = { r -> when (r) { is Route.Search -> "search"; else -> r } },
             label = "screen",

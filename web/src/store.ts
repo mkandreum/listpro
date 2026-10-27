@@ -78,9 +78,28 @@ function buildIndexes(c: Catalog): Indexes {
   return idx;
 }
 
-export async function loadCatalog(): Promise<boolean> {
+const CATALOG_CACHE = 'listpro-data-v1';
+
+/** Pinta al instante el último catálogo guardado; la red lo refresca después. */
+async function loadCachedCatalog() {
   try {
-    const c = await api.catalog();
+    const hit = await (await caches.open(CATALOG_CACHE)).match('/api/catalog');
+    if (hit && !state.catalog) {
+      const c = (await hit.json()) as Catalog;
+      if (!state.catalog) set({ catalog: c, idx: buildIndexes(c) });
+    }
+  } catch { /* sin Cache API (http sin TLS, modo privado) */ }
+}
+
+export async function loadCatalog(): Promise<boolean> {
+  if (!state.catalog) await loadCachedCatalog();
+  try {
+    const res = await fetch('/api/catalog', { cache: 'no-cache' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const copy = res.clone();
+    caches.open(CATALOG_CACHE).then((cache) => cache.put('/api/catalog', copy)).catch(() => {});
+    const c = (await res.json()) as Catalog;
+    if (state.catalog?.version === c.version && state.catalog.updatedAt === c.updatedAt) return false;
     const changed = state.catalog != null && state.catalog.version !== c.version;
     set({ catalog: c, idx: buildIndexes(c), catalogError: false });
     return changed;

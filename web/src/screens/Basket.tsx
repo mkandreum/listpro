@@ -6,6 +6,8 @@ import { basketLines, clearBasket, deleteBasket, dropMissing, reuseBasket, saveB
 import type { Product } from '../types';
 import { Price, ProductImage, QtyControl } from '../components/ProductTag';
 import { Empty } from '../components/Chrome';
+import { haptic } from '../fx/haptics';
+import { useTweened } from '../fx/motion';
 
 function defaultName() {
   return `Compra del ${new Date().toLocaleDateString('es-ES', { day: 'numeric', month: 'long' })}`;
@@ -24,6 +26,7 @@ export function Basket({ onOpen }: { onOpen: (p: Product) => void }) {
   const lines = useMemo(() => basketLines(), [basket, idx]); // eslint-disable-line react-hooks/exhaustive-deps
   const missing = Object.keys(basket).filter((id) => catalog && !idx.products.has(id));
   const total = lines.reduce((a, l) => a + l.p.price * l.qty, 0);
+  const shownTotal = useTweened(total);
   const doneCount = lines.filter((l) => inCart.includes(l.p.id)).length;
 
   let changed = 0, delta = 0;
@@ -50,7 +53,7 @@ export function Basket({ onOpen }: { onOpen: (p: Product) => void }) {
           confirmClear
             ? <div style={{ display: 'flex', gap: 8 }}>
                 <button className="btn" onClick={() => setConfirmClear(false)}>No</button>
-                <button className="btn danger" onClick={() => { clearBasket(); setConfirmClear(false); toast('Cesta vaciada'); }}>Sí, vaciar</button>
+                <button className="btn danger" onClick={() => { haptic.warn(); clearBasket(); setConfirmClear(false); toast('Cesta vaciada'); }}>Sí, vaciar</button>
               </div>
             : <button className="btn" onClick={() => setConfirmClear(true)}><Trash2 size={18} /> Vaciar</button>
         )}
@@ -65,7 +68,7 @@ export function Basket({ onOpen }: { onOpen: (p: Product) => void }) {
         <>
           <section className="total-block" aria-label="Total de la cesta">
             <div className="label num">{units(basket)} unidades · {lines.length} productos</div>
-            <div className="big"><Price value={total} className="" /></div>
+            <div className="big num"><Price value={shownTotal} className="" /></div>
             <div className="progress" role="progressbar" aria-valuemin={0} aria-valuemax={lines.length} aria-valuenow={doneCount} aria-label="Productos ya en el carro">
               <span style={{ width: `${lines.length ? (doneCount / lines.length) * 100 : 0}%` }} />
             </div>
@@ -95,11 +98,11 @@ export function Basket({ onOpen }: { onOpen: (p: Product) => void }) {
                   <span>{s?.name ?? 'Otros'}</span>
                   <span className="sum">{money(ls.reduce((a, l) => a + l.p.price * l.qty, 0))}</span>
                 </div>
-                {ls.map(({ p, qty }) => {
+                {ls.map(({ p, qty }, i) => {
                   const done = inCart.includes(p.id);
                   return (
-                    <div key={p.id} className={`line ${done ? 'done' : ''}`}>
-                      <button className="check-hit" role="checkbox" aria-checked={done} aria-label={`${p.name} en el carro`} onClick={() => toggleInCart(p.id)}>
+                    <div key={p.id} className={`line ${done ? 'done' : ''}`} style={{ '--d': Math.min(i, 8) } as React.CSSProperties}>
+                      <button className="check-hit" role="checkbox" aria-checked={done} aria-label={`${p.name} en el carro`} onClick={() => { if (inCart.includes(p.id)) haptic.tick(); else haptic.success(); toggleInCart(p.id); }}>
                         <span className="check" aria-checked={done}>{done && <Check size={18} strokeWidth={3.5} />}</span>
                       </button>
                       <button onClick={() => onOpen(p)} aria-label={`Ver ${p.name}`} style={{ display: 'contents' }}><ProductImage p={p} /></button>
@@ -121,7 +124,7 @@ export function Basket({ onOpen }: { onOpen: (p: Product) => void }) {
           <form className="save-form" onSubmit={(e) => {
             e.preventDefault();
             if (!name.trim()) return toast('Ponle un nombre a la cesta');
-            if (saveBasket(name.trim())) { toast(`Guardada: ${name.trim()}`); setName(defaultName()); }
+            if (saveBasket(name.trim())) { haptic.success(); toast(`Guardada: ${name.trim()}`); setName(defaultName()); }
           }}>
             <label className="sr-only" htmlFor="basket-name">Nombre de la cesta</label>
             <input id="basket-name" className="input" value={name} onChange={(e) => setName(e.target.value)} maxLength={60} />
@@ -166,7 +169,7 @@ export function Basket({ onOpen }: { onOpen: (p: Product) => void }) {
                   })}
                 </div>
                 <div className="total-actions">
-                  <button className="btn primary" onClick={() => toast(`${reuseBasket(b.id)} productos añadidos a la cesta`)}><RotateCcw size={18} /> Repetir compra</button>
+                  <button className="btn primary" onClick={() => { haptic.success(); toast(`${reuseBasket(b.id)} productos añadidos a la cesta`); }}><RotateCcw size={18} /> Repetir compra</button>
                   <button className="btn danger" onClick={() => { deleteBasket(b.id); toast('Cesta borrada'); }}><Trash2 size={18} /> Borrar</button>
                 </div>
               </div>

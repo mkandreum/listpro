@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { WifiOff } from 'lucide-react';
 import { parse, useHash } from './router';
 import { checkCatalogUpdate, loadCatalog, pullSync, useStore } from './store';
+import { haptic } from './fx/haptics';
 import type { Product } from './types';
 import { Empty, NavBar, SearchBar, Toasts, TopBar } from './components/Chrome';
 import { ProductSheet } from './components/ProductSheet';
@@ -43,7 +44,10 @@ export function App() {
     const b = setInterval(pullSync, SYNC_POLL_MS);
     const onVisible = () => { if (document.visibilityState === 'visible') { checkCatalogUpdate(); pullSync(); } };
     document.addEventListener('visibilitychange', onVisible);
-    return () => { clearInterval(a); clearInterval(b); document.removeEventListener('visibilitychange', onVisible); };
+    // Un toque suave en todo lo que se pulsa y no tiene ya su propia háptica
+    const onTap = (e: Event) => { if ((e.target as Element).closest?.('.chip, .stat, .cat-tile, .segmented button, .back, .btn:not(.primary)')) haptic.tick(); };
+    document.addEventListener('click', onTap, { capture: true });
+    return () => { clearInterval(a); clearInterval(b); document.removeEventListener('visibilitychange', onVisible); document.removeEventListener('click', onTap, { capture: true }); };
   }, []);
 
   useEffect(() => { if (route.name !== 'category') window.scrollTo({ top: 0 }); }, [route.name]);
@@ -72,7 +76,7 @@ export function App() {
 
   return (
     <div className="app">
-      <main className="page">
+      <main className="page screen" key={route.name === 'category' ? `c${route.id}` : route.name === 'search' ? 'search' : route.name}>
         {route.name !== 'category' && <TopBar />}
         {shopping && route.name !== 'category' && <SearchBar value={route.name === 'search' ? route.q : ''} autoFocus={route.name === 'search'} />}
         {screen}

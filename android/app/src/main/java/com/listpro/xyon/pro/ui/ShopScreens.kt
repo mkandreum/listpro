@@ -4,6 +4,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.IntrinsicSize
@@ -233,14 +234,18 @@ private fun SearchLauncher(onClick: () -> Unit, onFilters: () -> Unit) {
 
 /** Acceso rápido: icono en su baldosa de color, título y cifra. */
 @Composable
-private fun StatCard(icon: ImageVector, tint: Color, title: String, value: String, valueColor: Color, onClick: () -> Unit) {
+private fun StatCard(icon: ImageVector, tint: Color, title: String, value: String, valueColor: Color, index: Int = 0, onClick: () -> Unit) {
     val c = LocalColors.current
+    val haptics = rememberHaptics()
+    val source = remember { MutableInteractionSource() }
     Row(
         Modifier
+            .appear(index)
+            .pressScale(source)
             .width(164.dp)
             .heightIn(min = 72.dp)
             .raised(Ui.radius)
-            .clickable(role = Role.Button, onClick = onClick)
+            .clickable(source, indication = null, role = Role.Button) { haptics.tick(); onClick() }
             .padding(start = 12.dp, end = 14.dp, top = 12.dp, bottom = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -304,15 +309,15 @@ fun HomeScreen(
         item(key = "stats") {
             LazyRow(contentPadding = PaddingValues(start = Gutter, end = Gutter, bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 if (idx.deals.isNotEmpty()) item {
-                    StatCard(Icons.AutoMirrored.Rounded.TrendingDown, c.green, "Bajadas", "${idx.deals.size}", c.greenInk) { onOpen(Route.Deals(false)) }
+                    StatCard(Icons.AutoMirrored.Rounded.TrendingDown, c.green, "Bajadas", "${idx.deals.size}", c.greenInk, 0) { onOpen(Route.Deals(false)) }
                 }
                 if (idx.newProducts.isNotEmpty()) item {
-                    StatCard(Icons.Rounded.AutoAwesome, c.violet, "Novedades", "${idx.newProducts.size}", c.violet) { onOpen(Route.Deals(true)) }
+                    StatCard(Icons.Rounded.AutoAwesome, c.violet, "Novedades", "${idx.newProducts.size}", c.violet, 1) { onOpen(Route.Deals(true)) }
                 }
                 items(idx.catalog.sections.size) { i ->
                     val s = idx.catalog.sections[i]
                     // salto al pasillo: cabecera, buscador, accesos, bajadas y luego un item por pasillo
-                    StatCard(sectionIcon(s.icon), hueColor(s.hue), s.name, "${s.count}", c.ink2) { scope.launch { list.animateScrollToItem(4 + i) } }
+                    StatCard(sectionIcon(s.icon), hueColor(s.hue), s.name, "${s.count}", c.ink2, i + 2) { scope.launch { list.animateScrollToItem(4 + i) } }
                 }
             }
         }
@@ -330,11 +335,13 @@ fun HomeScreen(
                         AppButton("Ver ${idx.deals.size}", { onOpen(Route.Deals(false)) }, ghost = true, leading = null)
                     }
                     LazyRow(contentPadding = PaddingValues(start = Gutter, end = Gutter, bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                        items(idx.deals.take(14), key = { it.id }) { p ->
+                        val deals = idx.deals.take(14)
+                        items(deals.size, key = { deals[it].id }) { i ->
+                            val p = deals[i]
                             ProductTag(
                                 p, basket[p.id] ?: 0, idx.subcategories[p.subcategory]?.emoji ?: "🛒",
                                 onQty = { onQty(p.id, it) }, onOpen = { onProduct(p) },
-                                modifier = Modifier.width(186.dp),
+                                modifier = Modifier.width(186.dp), index = i,
                             )
                         }
                     }
@@ -353,7 +360,7 @@ private fun Aisle(s: Section, onSection: () -> Unit, onCategory: (Int) -> Unit) 
     Column(Modifier.padding(top = 28.dp)) {
         SectionBanner(s.name, s.blurb, sectionIcon(s.icon), hue, s.images, Modifier.padding(horizontal = Gutter), count = s.count, onCount = onSection)
         LazyRow(contentPadding = PaddingValues(start = Gutter, end = Gutter, top = 10.dp, bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            items(s.categories, key = { it.id }) { cat -> CategoryTile(cat, hue) { onCategory(cat.id) } }
+            items(s.categories.size, key = { s.categories[it].id }) { i -> val cat = s.categories[i]; CategoryTile(cat, hue, i) { onCategory(cat.id) } }
         }
     }
 }
@@ -406,13 +413,17 @@ fun SectionBanner(
 }
 
 @Composable
-private fun CategoryTile(cat: Category, hue: Color, onClick: () -> Unit) {
+private fun CategoryTile(cat: Category, hue: Color, index: Int, onClick: () -> Unit) {
     val c = LocalColors.current
+    val haptics = rememberHaptics()
+    val source = remember { MutableInteractionSource() }
     Column(
         Modifier
+            .appear(index)
+            .pressScale(source)
             .width(146.dp)
             .raised(Ui.radius)
-            .clickable(role = Role.Button, onClickLabel = "Abrir ${cat.name}", onClick = onClick)
+            .clickable(source, indication = null, role = Role.Button, onClickLabel = "Abrir ${cat.name}") { haptics.tap(); onClick() }
             .padding(8.dp),
     ) {
         Box(
@@ -452,10 +463,10 @@ fun CategoryScreen(
             cat.subcategories.forEach { s ->
                 add(GridEntry.Header(s.id, s.name))
                 var last: String? = null
-                bySub[s.id].orEmpty().forEach { p ->
+                bySub[s.id].orEmpty().forEachIndexed { i, p ->
                     if (p.group != last && p.group != s.name && p.group.isNotEmpty()) add(GridEntry.Group("${s.id}-${p.group}", p.group))
                     last = p.group
-                    add(GridEntry.Item(p, s.emoji))
+                    add(GridEntry.Item(p, s.emoji, i))
                 }
             }
         }
@@ -548,7 +559,7 @@ fun CategoryScreen(
                     Text(e.name.uppercase(), style = MaterialTheme.typography.labelMedium, color = c.ink2, modifier = Modifier.padding(top = 6.dp))
                 }
                 is GridEntry.Item -> item(key = e.p.id) {
-                    ProductTag(e.p, basket[e.p.id] ?: 0, e.emoji, onQty = { onQty(e.p.id, it) }, onOpen = { onProduct(e.p) })
+                    ProductTag(e.p, basket[e.p.id] ?: 0, e.emoji, onQty = { onQty(e.p.id, it) }, onOpen = { onProduct(e.p) }, index = e.index)
                 }
             }
         }
@@ -562,7 +573,7 @@ fun CategoryScreen(
 private sealed interface GridEntry {
     data class Header(val id: Int, val name: String) : GridEntry
     data class Group(val key: String, val name: String) : GridEntry
-    data class Item(val p: Product, val emoji: String) : GridEntry
+    data class Item(val p: Product, val emoji: String, val index: Int) : GridEntry
 }
 
 // ───────────── Búsqueda, bajadas y novedades ─────────────
@@ -674,8 +685,10 @@ fun ResultsScreen(
                 }
             }
         }
-        items(list.take(limit), key = { it.id }) { p ->
-            ProductTag(p, basket[p.id] ?: 0, idx.subcategories[p.subcategory]?.emoji ?: "🛒", onQty = { onQty(p.id, it) }, onOpen = { onProduct(p) })
+        val shown = list.take(limit)
+        items(shown.size, key = { shown[it].id }) { i ->
+            val p = shown[i]
+            ProductTag(p, basket[p.id] ?: 0, idx.subcategories[p.subcategory]?.emoji ?: "🛒", onQty = { onQty(p.id, it) }, onOpen = { onProduct(p) }, index = i)
         }
         if (list.size > limit) {
             item(span = { GridItemSpan(maxLineSpan) }) {

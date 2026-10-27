@@ -77,7 +77,7 @@ export function Results({ mode, q = '', onOpen }: { mode: 'search' | 'down' | 'n
         </Empty>
       ) : (
         <div className="grid" style={{ marginTop: 14 }}>
-          {list.slice(0, limit).map((p) => <ProductTag key={p.id} p={p} onOpen={onOpen} />)}
+          {list.slice(0, limit).map((p, i) => <ProductTag key={p.id} p={p} onOpen={onOpen} index={i} />)}
         </div>
       )}
       {list.length > limit && (

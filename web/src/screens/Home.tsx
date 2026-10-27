@@ -9,9 +9,9 @@ import { SectionIcon } from '../components/SectionIcon';
 
 const hueStyle = (hue: string) => ({ '--hue': hue } as React.CSSProperties);
 
-function CategoryTile({ c }: { c: Category }) {
+function CategoryTile({ c, index }: { c: Category; index: number }) {
   return (
-    <a href={href({ name: 'category', id: c.id })} className="cat-tile" aria-label={`${c.name}, ${c.count} productos`}>
+    <a href={href({ name: 'category', id: c.id })} className="cat-tile" style={{ '--d': index } as React.CSSProperties} aria-label={`${c.name}, ${c.count} productos`}>
       <div className="pics" aria-hidden>
         {c.images.map((src) => <img key={src} src={src} alt="" loading="lazy" decoding="async" />)}
       </div>
@@ -38,7 +38,7 @@ function Aisle({ s }: { s: Section }) {
         <span className="count">{s.count.toLocaleString('es-ES')} <ChevronRight size={16} /></span>
       </div>
       <div className="cat-row">
-        {s.categories.map((c) => <CategoryTile key={c.id} c={c} />)}
+        {s.categories.map((c, i) => <CategoryTile key={c.id} c={c} index={i} />)}
       </div>
     </section>
   );
@@ -88,7 +88,7 @@ export function Home({ onOpen }: { onOpen: (p: Product) => void }) {
             </a>
           </div>
           <div className="deals">
-            {deals.slice(0, 14).map((p) => <ProductTag key={p.id} p={p} onOpen={onOpen} className="deal" />)}
+            {deals.slice(0, 14).map((p, i) => <ProductTag key={p.id} p={p} onOpen={onOpen} className="deal" index={i} />)}
           </div>
         </section>
       )}

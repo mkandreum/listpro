@@ -45,7 +45,7 @@ App Android contra un servidor local en el emulador:
 cd android && ./gradlew assembleDebug -PapiBase=http://10.0.2.2:3000
 ```
 
-Por defecto la app apunta a `https://listpro.xyoncloud.win`. La firma de release se lee de `~/.android-keys/listpro-keystore.properties`.
+Por defecto la app apunta a `https://listpro.xyoncloud.win`. Para probar en un móvil real usa `./gradlew assemblePreview`: es tan rápida como la release (R8, sin depuración), va firmada con la clave de debug y se instala aparte (`com.listpro.xyon.pro.preview`). La build `debug` es mucho más lenta y solo sirve para desarrollar. La firma de release se lee de `~/.android-keys/listpro-keystore.properties`.
 
 ## Desplegar en Coolify
 

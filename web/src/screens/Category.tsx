@@ -4,6 +4,7 @@ import { money } from '../lib';
 import { SectionIcon } from '../components/SectionIcon';
 import { href } from '../router';
 import { useStore } from '../store';
+import { haptic } from '../fx/haptics';
 import type { Product } from '../types';
 import { ProductTag } from '../components/ProductTag';
 import { Empty } from '../components/Chrome';
@@ -88,7 +89,7 @@ export function CategoryScreen({ id, sub, onOpen }: { id: number; sub?: number; 
                 className="chip"
                 aria-pressed={active === s.id}
                 aria-selected={active === s.id}
-                onClick={() => document.getElementById(`sub-${s.id}`)?.scrollIntoView({ behavior: 'smooth' })}
+                onClick={() => { haptic.tick(); document.getElementById(`sub-${s.id}`)?.scrollIntoView({ behavior: 'smooth' }); }}
               >
                 {s.image ? <img src={s.image} alt="" /> : <span className="dot" style={{ background: section.hue }} />}
                 {s.name} <span className="n num">{s.count}</span>
@@ -108,13 +109,13 @@ export function CategoryScreen({ id, sub, onOpen }: { id: number; sub?: number; 
               <span className="muted small num">{list.length}</span>
             </div>
             <div className="grid">
-              {list.map((p) => {
+              {list.map((p, i) => {
                 const showGroup = p.group && p.group !== lastGroup && p.group !== s.name;
                 lastGroup = p.group;
                 return (
                   <Fragment key={p.id}>
                     {showGroup && <div className="group-label">{p.group}</div>}
-                    <ProductTag p={p} onOpen={onOpen} />
+                    <ProductTag p={p} onOpen={onOpen} index={i} />
                   </Fragment>
                 );
               })}
