@@ -38,6 +38,7 @@ Catálogo real de Mercadona (≈4.300 productos, ~150 subcategorías) con precio
 - Navegar por pasillo → categoría → subcategoría → grupo (árbol de Mercadona, agrupado por ID en `server/src/taxonomy.js`).
 - Buscar, filtrar por bajadas de precio y novedades, ver historial de precio de un producto.
 - Cesta con cantidades, total estimado, guardar cestas, repetir compra, estadísticas de gasto.
+- Planes de cenas con IA (Gemini): según presupuesto, súper, gustos, dieta, alergias, despensa, tiempo y electrodomésticos; cada plan trae recetas, nutrición estimada, coste real y lista de la compra que se añade a la cesta. No es reparto ni kits de comida.
 - Copia de seguridad a archivo JSON.
 - No es la tienda de Mercadona: no se compra desde ListPro; enlaza a la ficha oficial.
 

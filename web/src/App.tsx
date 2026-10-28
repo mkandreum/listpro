@@ -12,6 +12,7 @@ import { Results } from './screens/Results';
 import { Basket } from './screens/Basket';
 import { Stats } from './screens/Stats';
 import { Settings } from './screens/Settings';
+import { PlanScreen } from './screens/Plan';
 
 const CATALOG_POLL_MS = 10 * 60_000;
 const SYNC_POLL_MS = 20_000;
@@ -68,6 +69,7 @@ export function App() {
       case 'search': screen = <Results key="search" mode="search" q={route.q} onOpen={onOpen} />; break;
       case 'deals': screen = <Results key={route.kind} mode={route.kind} onOpen={onOpen} />; break;
       case 'category': screen = <CategoryScreen key={route.id} id={route.id} sub={route.sub} onOpen={onOpen} />; break;
+      case 'plan': screen = <PlanScreen recipe={route.recipe} />; break;
       case 'basket': screen = <Basket onOpen={onOpen} />; break;
       case 'stats': screen = <Stats />; break;
       case 'settings': screen = <Settings />; break;
@@ -76,7 +78,7 @@ export function App() {
 
   return (
     <div className="app">
-      <main className="page screen" key={route.name === 'category' ? `c${route.id}` : route.name === 'search' ? 'search' : route.name}>
+      <main className="page screen" key={route.name === 'category' ? `c${route.id}` : route.name}>
         {route.name !== 'category' && <TopBar />}
         {shopping && route.name !== 'category' && <SearchBar value={route.name === 'search' ? route.q : ''} autoFocus={route.name === 'search'} />}
         {screen}

@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { db, getMeta } from './db.js';
 import { getCatalog, getPriceHistory } from './catalog.js';
 import { isScraping, scheduleScraping, scrapeCatalog } from './scraper.js';
+import { createPlan, getPlan, plannerOptions, PlannerError } from './planner.js';
 
 const PORT = Number(process.env.PORT ?? 3000);
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN ?? '';
@@ -90,6 +91,37 @@ app.put('/api/lists/:code', (req, res) => {
   const now = new Date().toISOString();
   db.prepare('UPDATE lists SET data = ?, updated_at = ? WHERE code = ?').run(JSON.stringify(req.body.data), now, code);
   res.json({ code, updatedAt: now });
+});
+
+// --- Planes de cenas con IA ---
+app.get('/api/planner/options', (_req, res) => res.json(plannerOptions()));
+
+// Cada plan cuesta una llamada a la IA: como mucho 8 por hora y dirección.
+const planHits = new Map();
+function planLimited(ip) {
+  const now = Date.now();
+  const recent = (planHits.get(ip) ?? []).filter((t) => now - t < 3600_000);
+  if (recent.length >= 8) return true;
+  recent.push(now);
+  planHits.set(ip, recent);
+  return false;
+}
+
+app.post('/api/plans', async (req, res) => {
+  if (planLimited(req.ip)) return res.status(429).json({ error: 'Has creado muchos planes seguidos. Prueba dentro de un rato.' });
+  try {
+    res.status(201).json(await createPlan(req.body?.prefs ?? {}, getMeta('catalog_version') ?? '0'));
+  } catch (e) {
+    const status = e instanceof PlannerError ? e.status : 502;
+    if (!(e instanceof PlannerError)) console.error('[planner]', e?.message ?? e);
+    res.status(status).json({ error: e instanceof PlannerError ? e.message : 'La IA no ha respondido. Prueba otra vez en un momento.' });
+  }
+});
+
+app.get('/api/plans/:id', (req, res) => {
+  const plan = /^[\w-]{6,20}$/.test(req.params.id) ? getPlan(req.params.id) : null;
+  if (!plan) return res.status(404).json({ error: 'Plan no encontrado' });
+  res.json(plan);
 });
 
 app.post('/api/admin/refresh', (req, res) => {

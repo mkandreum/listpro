@@ -35,6 +35,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.BarChart
+import androidx.compose.material.icons.rounded.RestaurantMenu
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.ShoppingBasket
 import androidx.compose.material.icons.rounded.Storefront
@@ -80,6 +81,7 @@ private data class NavItem(val tab: Tab, val label: String, val icon: ImageVecto
 
 private val NAV = listOf(
     NavItem(Tab.Products, "Productos", Icons.Rounded.Storefront),
+    NavItem(Tab.Plan, "Cenas", Icons.Rounded.RestaurantMenu),
     NavItem(Tab.Basket, "Cesta", Icons.Rounded.ShoppingBasket),
     NavItem(Tab.Stats, "Gastos", Icons.Rounded.BarChart),
     NavItem(Tab.Settings, "Ajustes", Icons.Rounded.Settings),
@@ -108,7 +110,7 @@ fun GlassPillNav(selected: Tab, basketCount: Int, onSelect: (Tab) -> Unit, modif
         modifier
             .navigationBarsPadding()
             .padding(horizontal = 12.dp, vertical = 12.dp)
-            .widthIn(max = 440.dp)
+            .widthIn(max = 500.dp)
             .fillMaxWidth()
             .height(76.dp)
             .shadow(16.dp, CircleShape, ambientColor = Color(0x330C1714), spotColor = Color(0x330C1714))

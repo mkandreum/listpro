@@ -97,6 +97,9 @@ data class ListData(
     val addedPrices: Map<String, Double> = emptyMap(),
     val inCart: List<String> = emptyList(),
     val savedBaskets: List<SavedBasket> = emptyList(),
+    /** Plan de cenas activo y preferencias: así se ve también en los otros dispositivos. */
+    val planId: String? = null,
+    val planPrefs: PlanPrefs? = null,
 )
 
 @Serializable
@@ -116,4 +119,98 @@ data class UserState(
     val list: ListData = ListData(),
     val sync: SyncState = SyncState(),
     val theme: ThemePref = ThemePref.System,
+    val plan: MealPlan? = null,
 )
+
+// ───────────── Planes de cenas ─────────────
+
+@Serializable
+data class PlanPrefs(
+    val budget: Int = 45,
+    val people: Int = 2,
+    val nights: Int = 5,
+    val maxMinutes: Int = 40,
+    val diets: List<String> = listOf("omnivora"),
+    val appliances: List<String> = listOf("fuego", "microondas"),
+    val likes: String = "",
+    val dislikes: String = "",
+    val allergies: String = "",
+    val pantry: String = "",
+    val store: String = "mercadona",
+)
+
+@Immutable
+@Serializable
+data class Nutrition(val kcal: Int = 0, val protein: Int = 0, val carbs: Int = 0, val fat: Int = 0, val fiber: Int = 0, val salt: Double = 0.0)
+
+@Immutable
+@Serializable
+data class PlanIngredient(
+    val productId: String? = null,
+    val name: String,
+    val amount: String = "",
+    val fraction: Double = 0.0,
+    val fromPantry: Boolean = false,
+    val image: String? = null,
+    val price: Double? = null,
+    val size: String? = null,
+)
+
+@Immutable
+@Serializable
+data class PlanRecipe(
+    val day: String,
+    val name: String,
+    val description: String = "",
+    val minutes: Int = 0,
+    val difficulty: String = "fácil",
+    val appliances: List<String> = emptyList(),
+    val servings: Int = 1,
+    val nutrition: Nutrition = Nutrition(),
+    val ingredients: List<PlanIngredient> = emptyList(),
+    val steps: List<String> = emptyList(),
+    val tip: String = "",
+    val cost: Double = 0.0,
+    val costPerServing: Double = 0.0,
+)
+
+@Immutable
+@Serializable
+data class ShoppingItem(
+    val productId: String,
+    val name: String,
+    val size: String = "",
+    val image: String? = null,
+    val price: Double,
+    val packs: Int,
+    val cost: Double,
+    val usedIn: List<String> = emptyList(),
+)
+
+@Serializable
+data class PlanTotals(
+    val shopping: Double = 0.0,
+    val consumed: Double = 0.0,
+    val perServing: Double = 0.0,
+    val kcalAvg: Int = 0,
+    val proteinAvg: Int = 0,
+    val budget: Double = 0.0,
+    val overBudget: Boolean = false,
+)
+
+@Immutable
+@Serializable
+data class MealPlan(
+    val id: String,
+    val createdAt: String,
+    val prefs: PlanPrefs = PlanPrefs(),
+    val title: String = "",
+    val summary: String = "",
+    val recipes: List<PlanRecipe> = emptyList(),
+    val shopping: List<ShoppingItem> = emptyList(),
+    val totals: PlanTotals = PlanTotals(),
+    val warnings: List<String> = emptyList(),
+)
+
+@Serializable
+data class PlannerOptions(val enabled: Boolean = false)

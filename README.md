@@ -27,8 +27,15 @@ ListPro 2.0 son tres piezas conectadas que comparten catálogo, categorías y ce
    - `GET /api/catalog/meta` — versión, para saber si hay precios nuevos.
    - `GET /api/products/:id/history` — historial de precio.
    - `POST/GET/PUT /api/lists/:code` — lista compartida por código de 8 caracteres (web ↔ Android ↔ familia).
+   - `GET /api/planner/options`, `POST /api/plans`, `GET /api/plans/:id` — planes de cenas con IA (Gemini) sobre el catálogo real.
    - `POST /api/admin/refresh` — fuerza una actualización (`Authorization: Bearer $ADMIN_TOKEN`).
 4. **Web y Android** consumen la misma API: pasillos a color, bajadas de precio, búsqueda, cesta ordenada por pasillos con casillas "en el carro", aviso si un precio cambió desde que lo añadiste, cestas guardadas, gastos y sincronización. Android además comparte la lista **por NFC** acercando dos móviles y refresca los precios en segundo plano.
+
+## Planes de cenas (pestaña Cenas)
+
+El usuario indica presupuesto semanal, personas, número de cenas, súper (por ahora Mercadona), dieta, alergias, gustos, lo que ya tiene en casa, tiempo máximo y electrodomésticos. El servidor (`server/src/planner.js`) manda a Gemini esas preferencias y el catálogo de alimentación (~2.000 productos con id y precio) y pide recetas con productos concretos y la fracción de envase que usa cada una. Después **el servidor recalcula todo con los precios reales**: coste por ración, lista de la compra en envases enteros (sumando lo que se comparte entre cenas) y total frente al presupuesto. Si se pasa o faltan cenas, repite una vez explicándole el fallo. La nutrición es una estimación de la IA y así se indica. Límite: 8 planes por hora y dirección IP.
+
+Para desarrollar sin clave: `PLANNER_MOCK=1 npm start` monta un plan de prueba con productos reales.
 
 ## Puesta en marcha
 
@@ -50,7 +57,7 @@ Por defecto la app apunta a `https://listpro.xyoncloud.win`. Para probar en un m
 ## Desplegar en Coolify
 
 1. En Coolify, crea un recurso nuevo: *Private Repository (GitHub App)* → `mkandreum/listpro`, rama `main`, Build Pack **Docker Compose** (`docker-compose.yaml`).
-2. Variables de entorno (todas opcionales): `MERCADONA_WH` (por defecto `mad1`), `SCRAPE_HOUR` (por defecto `6`), `ADMIN_TOKEN`.
+2. Variables de entorno: `GEMINI_API_KEY` (la de Puchero/VoltBody; sin ella la pestaña Cenas avisa de que no está disponible) y, opcionales, `GEMINI_MODEL_PLAN`, `GEMINI_MODEL_FAST`, `MERCADONA_WH` (por defecto `mad1`), `SCRAPE_HOUR` (por defecto `6`) y `ADMIN_TOKEN`.
 3. Asigna el dominio `listpro.xyoncloud.win` al servicio `app`, puerto **3000**.
 4. Lanza **Deploy**. Al arrancar con la base de datos vacía descarga el catálogo (~1,5 min); después se actualiza cada mañana. La base de datos vive en el volumen `listpro_data` y sobrevive a los redespliegues.
 

@@ -5,6 +5,7 @@ export type Route =
   | { name: 'search'; q: string }
   | { name: 'deals'; kind: 'down' | 'new' }
   | { name: 'category'; id: number; sub?: number }
+  | { name: 'plan'; recipe?: number }
   | { name: 'basket' }
   | { name: 'stats' }
   | { name: 'settings' };
@@ -18,6 +19,7 @@ export function parse(hash: string): Route {
     case 'bajadas': return { name: 'deals', kind: 'down' };
     case 'novedades': return { name: 'deals', kind: 'new' };
     case 'c': return { name: 'category', id: Number(parts[1]), sub: parts[2] ? Number(parts[2]) : undefined };
+    case 'plan': return { name: 'plan', recipe: parts[1] ? Number(parts[1]) : undefined };
     case 'cesta': return { name: 'basket' };
     case 'gastos': return { name: 'stats' };
     case 'ajustes': return { name: 'settings' };
@@ -31,6 +33,7 @@ export function href(r: Route): string {
     case 'search': return `#/buscar?q=${encodeURIComponent(r.q)}`;
     case 'deals': return r.kind === 'down' ? '#/bajadas' : '#/novedades';
     case 'category': return `#/c/${r.id}${r.sub ? `/${r.sub}` : ''}`;
+    case 'plan': return `#/plan${r.recipe != null ? `/${r.recipe}` : ''}`;
     case 'basket': return '#/cesta';
     case 'stats': return '#/gastos';
     case 'settings': return '#/ajustes';

@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from 'react';
 import { api } from './api';
 import { uid } from './lib';
-import type { Catalog, Category, ListData, Product, SavedBasket, Section, Subcategory } from './types';
+import type { Catalog, Category, ListData, MealPlan, PlanPrefs, Product, SavedBasket, Section, Subcategory } from './types';
 
 export type ThemePref = 'system' | 'light' | 'dark';
 
@@ -24,6 +24,8 @@ export interface State {
   sync: { code: string | null; updatedAt: string | null; dirty: boolean };
   theme: ThemePref;
   toasts: { id: string; text: string }[];
+  plan: MealPlan | null;
+  planPrefs: PlanPrefs | null;
 }
 
 function load<T>(key: string, fallback: T): T {
@@ -46,6 +48,8 @@ let state: State = {
   sync: { code: null, updatedAt: null, dirty: false, ...load('listproSync', {}) },
   theme: load<ThemePref>('listproThemePref', 'system'),
   toasts: [],
+  plan: load<MealPlan | null>('listproPlan', null),
+  planPrefs: load<PlanPrefs | null>('listproPlanPrefs', null),
 };
 
 const listeners = new Set<() => void>();
@@ -241,7 +245,10 @@ export async function importBackup(file: File) {
 }
 
 // --- Sincronización (mismo protocolo que la app Android) ---
-const payload = (): ListData => ({ basket: state.basket, addedPrices: state.addedPrices, inCart: state.inCart, savedBaskets: state.savedBaskets });
+const payload = (): ListData => ({
+  basket: state.basket, addedPrices: state.addedPrices, inCart: state.inCart, savedBaskets: state.savedBaskets,
+  planId: state.plan?.id ?? null, planPrefs: state.planPrefs,
+});
 
 function setSync(sync: State['sync']) {
   set({ sync });
@@ -263,6 +270,10 @@ function mergeSaved(remote: SavedBasket[] = []) {
 }
 
 function applyRemote(data: ListData) {
+  if (data.planPrefs) { set({ planPrefs: data.planPrefs }); save('listproPlanPrefs', data.planPrefs); }
+  if (data.planId && data.planId !== state.plan?.id) {
+    api.getPlan(data.planId).then((plan) => { set({ plan }); save('listproPlan', plan); }).catch(() => {});
+  }
   set({
     basket: data.basket ?? {},
     addedPrices: data.addedPrices ?? {},
@@ -326,4 +337,40 @@ export async function joinSync(raw: string) {
 
 export function leaveSync() {
   setSync({ code: null, updatedAt: null, dirty: false });
+}
+
+// --- Planes de cenas ---
+export async function generatePlan(prefs: PlanPrefs) {
+  set({ planPrefs: prefs });
+  save('listproPlanPrefs', prefs);
+  const plan = await api.createPlan(prefs).catch((e) => {
+    throw new Error(e?.body?.error ?? 'No se ha podido crear el plan. Prueba otra vez.');
+  });
+  set({ plan });
+  save('listproPlan', plan);
+  markDirty();
+  return plan;
+}
+
+export function clearPlan() {
+  set({ plan: null });
+  save('listproPlan', null);
+  markDirty();
+}
+
+/** Mete en la cesta los envases que hacen falta para el plan (o solo para una cena). */
+export function addPlanToBasket(items: { productId: string; packs: number }[]) {
+  const basket = { ...state.basket };
+  const addedPrices = { ...state.addedPrices };
+  let n = 0;
+  for (const { productId, packs } of items) {
+    const p = state.idx.products.get(productId);
+    if (!p) continue;
+    basket[productId] = Math.max(basket[productId] ?? 0, packs);
+    addedPrices[productId] ??= p.price;
+    n++;
+  }
+  set({ basket, addedPrices });
+  persistList();
+  return n;
 }

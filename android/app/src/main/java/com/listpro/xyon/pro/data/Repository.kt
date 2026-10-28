@@ -234,6 +234,7 @@ class Repository(context: Context, val api: Api = Api()) {
             if (remote.updatedAt != sync.updatedAt && !_state.value.sync.dirty) {
                 _state.update { it.copy(list = remote.data, sync = SyncState(code, remote.updatedAt, false)) }
                 persist()
+                syncPlan()
             }
         }
     }
@@ -262,4 +263,45 @@ class Repository(context: Context, val api: Api = Api()) {
     }
 
     fun leaveSync() = setSync(SyncState())
+
+    // --- Planes de cenas ---
+    suspend fun generatePlan(prefs: PlanPrefs): MealPlan {
+        _state.update { it.copy(list = it.list.copy(planPrefs = prefs)) }
+        val plan = api.createPlan(prefs)
+        _state.update { it.copy(plan = plan, list = it.list.copy(planId = plan.id, planPrefs = prefs)) }
+        persist()
+        markDirty()
+        return plan
+    }
+
+    fun clearPlan() {
+        _state.update { it.copy(plan = null, list = it.list.copy(planId = null)) }
+        persist()
+        markDirty()
+    }
+
+    /** Mete en la cesta los envases que hacen falta (de todo el plan o de una cena). */
+    fun addToBasket(items: List<Pair<String, Int>>): Int {
+        val idx = _catalog.value ?: return 0
+        var n = 0
+        editList { l ->
+            val basket = l.basket.toMutableMap()
+            val added = l.addedPrices.toMutableMap()
+            items.forEach { (id, packs) ->
+                val p = idx.products[id] ?: return@forEach
+                basket[id] = maxOf(basket[id] ?: 0, packs)
+                added.putIfAbsent(id, p.price)
+                n++
+            }
+            l.copy(basket = basket, addedPrices = added)
+        }
+        return n
+    }
+
+    /** Si otro dispositivo creó un plan, lo descarga. */
+    private suspend fun syncPlan() {
+        val id = _state.value.list.planId ?: return
+        if (_state.value.plan?.id == id) return
+        runCatching { api.getPlan(id) }.onSuccess { plan -> _state.update { it.copy(plan = plan) }; persist() }
+    }
 }

@@ -53,6 +53,7 @@ import com.listpro.xyon.pro.ui.BasketScreen
 import com.listpro.xyon.pro.ui.CategoryScreen
 import com.listpro.xyon.pro.ui.GlassPillNav
 import com.listpro.xyon.pro.ui.HomeScreen
+import com.listpro.xyon.pro.ui.PlanScreen
 import com.listpro.xyon.pro.ui.ListProTheme
 import com.listpro.xyon.pro.ui.LocalColors
 import com.listpro.xyon.pro.ui.ProductSheet
@@ -187,6 +188,7 @@ private fun App(vm: AppViewModel, nfcAvailable: Boolean) {
                 is Route.Search, is Route.Deals -> idx?.let {
                     ResultsScreen(it, r, basket, onQuery = { q -> vm.open(Route.Search(q)) }, onBack = { vm.back() }, onProduct = onProduct, onQty = onQty)
                 }
+                Route.Plan -> PlanScreen(vm, idx)
                 Route.Basket -> BasketScreen(
                     idx, state, vm.repo.basketLines(state.list, idx), onQty, vm.repo::toggleInCart, onProduct,
                     onClear = { vm.repo.clearBasket(); vm.repo.toast("Cesta vaciada") },

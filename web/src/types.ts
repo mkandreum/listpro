@@ -76,6 +76,9 @@ export interface ListData {
   addedPrices: Record<string, number>;
   inCart?: string[];
   savedBaskets: SavedBasket[];
+  /** Plan de cenas activo y preferencias: así el plan también se ve en los otros dispositivos. */
+  planId?: string | null;
+  planPrefs?: PlanPrefs | null;
 }
 
 export interface PriceHistory {
@@ -83,4 +86,79 @@ export interface PriceHistory {
   name: string;
   price: number;
   history: { price: number; at: string }[];
+}
+
+// ───────────── Planes de cenas ─────────────
+
+export interface PlanPrefs {
+  budget: number;
+  people: number;
+  nights: number;
+  maxMinutes: number;
+  diets: string[];
+  appliances: string[];
+  likes: string;
+  dislikes: string;
+  allergies: string;
+  pantry: string;
+  store: string;
+}
+
+export interface Nutrition { kcal: number; protein: number; carbs: number; fat: number; fiber: number; salt: number }
+
+export interface PlanIngredient {
+  productId: string | null;
+  name: string;
+  amount: string;
+  fraction: number;
+  fromPantry: boolean;
+  image: string | null;
+  price: number | null;
+  size: string | null;
+}
+
+export interface PlanRecipe {
+  day: string;
+  name: string;
+  description: string;
+  minutes: number;
+  difficulty: string;
+  appliances: string[];
+  servings: number;
+  nutrition: Nutrition;
+  ingredients: PlanIngredient[];
+  steps: string[];
+  tip: string;
+  cost: number;
+  costPerServing: number;
+}
+
+export interface ShoppingItem {
+  productId: string;
+  name: string;
+  size: string;
+  image: string | null;
+  price: number;
+  packs: number;
+  cost: number;
+  usedIn: string[];
+}
+
+export interface MealPlan {
+  id: string;
+  createdAt: string;
+  prefs: PlanPrefs;
+  title: string;
+  summary: string;
+  recipes: PlanRecipe[];
+  shopping: ShoppingItem[];
+  totals: { shopping: number; consumed: number; perServing: number; kcalAvg: number; proteinAvg: number; budget: number; overBudget: boolean };
+  warnings: string[];
+}
+
+export interface PlannerOptions {
+  enabled: boolean;
+  diets: { id: string; label: string }[];
+  appliances: { id: string; label: string }[];
+  stores: { id: string; label: string }[];
 }

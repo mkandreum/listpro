@@ -15,14 +15,16 @@ sealed interface Route {
     data class Search(val query: String) : Route
     data class Deals(val newOnes: Boolean) : Route
     data class CategoryRoute(val id: Int) : Route
+    data object Plan : Route
     data object Basket : Route
     data object Stats : Route
     data object Settings : Route
 }
 
-enum class Tab { Products, Basket, Stats, Settings }
+enum class Tab { Products, Plan, Basket, Stats, Settings }
 
 fun Route.tab(): Tab = when (this) {
+    Route.Plan -> Tab.Plan
     Route.Basket -> Tab.Basket
     Route.Stats -> Tab.Stats
     Route.Settings -> Tab.Settings
@@ -60,6 +62,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         backStack.add(Route.Home)
         when (tab) {
             Tab.Products -> Unit
+            Tab.Plan -> backStack.add(Route.Plan)
             Tab.Basket -> backStack.add(Route.Basket)
             Tab.Stats -> backStack.add(Route.Stats)
             Tab.Settings -> backStack.add(Route.Settings)

@@ -1,4 +1,4 @@
-import type { Catalog, ListData, PriceHistory } from './types';
+import type { Catalog, ListData, MealPlan, PlanPrefs, PlannerOptions, PriceHistory } from './types';
 
 const BASE = import.meta.env.VITE_API_BASE ?? '';
 
@@ -11,6 +11,11 @@ export const api = {
   catalog: () => fetch(`${BASE}/api/catalog`, { cache: 'no-cache' }).then((r) => json<Catalog>(r)),
   catalogMeta: () => fetch(`${BASE}/api/catalog/meta`, { cache: 'no-store' }).then((r) => json<{ version: string; updatedAt: string }>(r)),
   history: (id: string) => fetch(`${BASE}/api/products/${encodeURIComponent(id)}/history`).then((r) => json<PriceHistory>(r)),
+  plannerOptions: () => fetch(`${BASE}/api/planner/options`).then((r) => json<PlannerOptions>(r)),
+  createPlan: (prefs: PlanPrefs) =>
+    fetch(`${BASE}/api/plans`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prefs }) })
+      .then((r) => json<MealPlan>(r)),
+  getPlan: (id: string) => fetch(`${BASE}/api/plans/${encodeURIComponent(id)}`).then((r) => json<MealPlan>(r)),
   createList: (data: ListData) =>
     fetch(`${BASE}/api/lists`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ data }) })
       .then((r) => json<{ code: string; updatedAt: string }>(r)),

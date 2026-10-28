@@ -16,6 +16,10 @@ services:
       SCRAPE_HOUR: ${SCRAPE_HOUR:-6}
       # Para forzar una actualización con POST /api/admin/refresh
       ADMIN_TOKEN: ${ADMIN_TOKEN:-}
+      # Planes de cenas con IA (la misma clave que Puchero/VoltBody)
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL_PLAN: ${GEMINI_MODEL_PLAN:-gemini-3-flash-preview}
+      GEMINI_MODEL_FAST: ${GEMINI_MODEL_FAST:-gemini-3.5-flash-lite}
     volumes:
       - listpro_data:/data
     healthcheck:

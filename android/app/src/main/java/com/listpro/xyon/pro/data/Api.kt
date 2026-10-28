@@ -49,6 +49,28 @@ class Api(private val base: String = BuildConfig.API_BASE) {
 
     suspend fun history(id: String): PriceHistory = get("/api/products/$id/history")
 
+    suspend fun plannerOptions(): PlannerOptions = get("/api/planner/options")
+
+    suspend fun getPlan(id: String): MealPlan = get("/api/plans/$id")
+
+    @Serializable private data class PlanRequest(val prefs: PlanPrefs)
+    @Serializable private data class ApiError(val error: String = "")
+
+    // Crear un plan llama a la IA y puede tardar hasta un minuto
+    private val slowClient = client.newBuilder().readTimeout(120, TimeUnit.SECONDS).callTimeout(150, TimeUnit.SECONDS).build()
+
+    suspend fun createPlan(prefs: PlanPrefs): MealPlan = withContext(Dispatchers.IO) {
+        val body = json.encodeToString(PlanRequest.serializer(), PlanRequest(prefs)).toRequestBody(jsonType)
+        slowClient.newCall(Request.Builder().url("$base/api/plans").post(body).build()).execute().use { res ->
+            val text = res.body?.string().orEmpty()
+            if (!res.isSuccessful) {
+                val msg = runCatching { json.decodeFromString(ApiError.serializer(), text).error }.getOrNull()
+                throw IllegalStateException(msg?.takeIf { it.isNotBlank() } ?: "No se ha podido crear el plan. Prueba otra vez.")
+            }
+            json.decodeFromString(MealPlan.serializer(), text)
+        }
+    }
+
     @Serializable private data class Created(val code: String, val updatedAt: String)
     @Serializable data class Remote(val code: String, val data: ListData, val updatedAt: String)
     @Serializable private data class Put(val data: ListData, val baseUpdatedAt: String?, val force: Boolean)
