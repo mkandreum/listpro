@@ -146,6 +146,12 @@ data class UserState(
     val meId: String? = null,
     /** Última versión vista en el servidor: la base de la fusión a tres bandas. */
     val syncBase: ListData? = null,
+    /** Sesión de la cuenta (null = sin cuenta). */
+    val auth: Session? = null,
+    /** Ya vio la presentación de la app. */
+    val onboarded: Boolean = false,
+    /** Eligió seguir sin cuenta. */
+    val guest: Boolean = false,
 )
 
 // ───────────── Planes de cenas ─────────────
@@ -240,3 +246,11 @@ data class MealPlan(
 
 @Serializable
 data class PlannerOptions(val enabled: Boolean = false)
+
+// ───────────── Cuentas ─────────────
+
+@Serializable
+data class User(val id: String, val name: String, val email: String, val listCode: String? = null, val createdAt: String = "")
+
+@Serializable
+data class Session(val token: String, val user: User)

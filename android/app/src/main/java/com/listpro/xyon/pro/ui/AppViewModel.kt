@@ -86,6 +86,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun refresh() = viewModelScope.launch {
         if (repo.refreshCatalog()) repo.toast("Precios actualizados")
+        repo.refreshAccount()
         repo.pullSync()
     }
 

@@ -189,3 +189,18 @@ export interface PlannerOptions {
   appliances: { id: string; label: string }[];
   stores: { id: string; label: string }[];
 }
+
+// ───────────── Cuentas ─────────────
+
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  listCode: string | null;
+  createdAt: string;
+}
+
+export interface Session {
+  token: string;
+  user: User;
+}

@@ -27,7 +27,8 @@ export function Basket({ onOpen, join }: { onOpen: (p: Product) => void; join?: 
   const meId = useStore((s) => s.meId);
   const addedBy = useStore((s) => s.addedBy);
   const pickedBy = useStore((s) => s.pickedBy);
-  const shared = useStore((s) => s.sync.code != null);
+  // Con cuenta siempre hay lista en el servidor; "compartida" es cuando hay alguien más
+  const shared = useStore((s) => s.sync.code != null && s.members.length > 1);
   const [confirmClear, setConfirmClear] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [checkout, setCheckout] = useState(false);

@@ -125,8 +125,9 @@ fun BasketScreen(
 ) {
     val c = LocalColors.current
     val list = state.list
-    val shared = state.sync.code != null
-    val showWho = shared && list.members.size > 1
+    // Con cuenta siempre hay lista en el servidor; "compartida" es cuando hay alguien más
+    val shared = state.sync.code != null && list.members.size > 1
+    val showWho = shared
     var confirmClear by rememberSaveable { mutableStateOf(false) }
     val missing = if (idx == null) 0 else list.basket.keys.count { it !in idx.products }
     val total = lines.sumOf { it.product.price * it.qty }
@@ -485,6 +486,7 @@ fun SettingsScreen(
     sync: SyncState,
     members: Int,
     theme: ThemePref,
+    account: @Composable () -> Unit,
     onShare: () -> Unit,
     onTheme: (ThemePref) -> Unit,
     onRefresh: () -> Unit,
@@ -494,10 +496,11 @@ fun SettingsScreen(
     val c = LocalColors.current
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = Gutter, end = Gutter, bottom = NavClearance)) {
         item { ScreenTitle("Ajustes") }
+        item { account() }
         item {
             SharePromo(
-                if (sync.code != null) "Lista compartida con $members ${if (members == 1) "persona" else "personas"}" else "Compartir la cesta",
-                if (sync.code != null) "Código ${sync.code} · invita o gestiona quién está" else "Comprad entre varios y repartid los gastos",
+                if (sync.code != null && members > 1) "Lista compartida con $members personas" else "Compartir la cesta",
+                if (sync.code != null && members > 1) "Código ${sync.code} · invita o gestiona quién está" else "Comprad entre varios y repartid los gastos",
                 onShare, Modifier.padding(top = 16.dp),
             )
         }

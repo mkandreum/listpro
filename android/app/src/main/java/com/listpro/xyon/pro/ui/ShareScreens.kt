@@ -375,7 +375,7 @@ private fun SharedView(vm: AppViewModel, state: UserState, code: String, nfcAvai
     var name by rememberSaveable { mutableStateOf(me?.name ?: "") }
     var leaving by rememberSaveable { mutableStateOf(false) }
 
-    SheetTitle("Lista compartida", center = true)
+    SheetTitle(if (members.size > 1) "Lista compartida" else "Comparte tu lista", center = true)
     Text("● En directo con ${members.size} ${if (members.size == 1) "persona" else "personas"}", style = MaterialTheme.typography.labelMedium, color = c.greenInk, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
 
     Row(
@@ -435,6 +435,7 @@ private fun SharedView(vm: AppViewModel, state: UserState, code: String, nfcAvai
     }
 
     Spacer(Modifier.height(20.dp))
+    if (state.auth != null && members.size < 2) return
     if (leaving) {
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(c.up.copy(alpha = 0.12f)).padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("Dejarás de ver los cambios de los demás en este móvil.", style = MaterialTheme.typography.bodyMedium, color = c.ink)
@@ -549,7 +550,7 @@ fun AccountsContent(vm: AppViewModel, state: UserState) {
     var adding by rememberSaveable { mutableStateOf(false) }
     var confirm by rememberSaveable { mutableStateOf<String?>(null) }
 
-    if (state.sync.code == null) {
+    if (state.sync.code == null || state.list.members.size < 2) {
         EmptyState(
             Icons.Rounded.Group, "Repartid los gastos sin hacer cuentas",
             "Comparte la cesta con tu pareja, tu familia o tus compis de piso. Cada compra se apunta con quién la pagó, y ListPro os dice quién debe cuánto a quién.",

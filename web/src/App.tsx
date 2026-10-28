@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { WifiOff } from 'lucide-react';
 import { parse, useHash } from './router';
-import { checkCatalogUpdate, loadCatalog, pullSync, useStore } from './store';
+import { checkCatalogUpdate, loadCatalog, pullSync, refreshAccount, useStore } from './store';
+import { AuthScreen, Onboarding } from './screens/Welcome';
 import { haptic } from './fx/haptics';
 import type { Product } from './types';
 import { Empty, NavBar, SearchBar, Toasts, TopBar } from './components/Chrome';
@@ -33,6 +34,8 @@ function useTheme() {
 export function App() {
   const route = parse(useHash());
   const catalogError = useStore((s) => s.catalogError);
+  const onboarded = useStore((s) => s.onboarded);
+  const needsAuth = useStore((s) => !s.auth && !s.guest);
   const [open, setOpen] = useState<Product | null>(null);
   const onOpen = useCallback((p: Product) => setOpen(p), []);
   const onClose = useCallback(() => setOpen(null), []);
@@ -41,6 +44,7 @@ export function App() {
   useEffect(() => {
     loadCatalog();
     pullSync();
+    refreshAccount();
     const a = setInterval(checkCatalogUpdate, CATALOG_POLL_MS);
     const b = setInterval(pullSync, SYNC_POLL_MS);
     const onVisible = () => { if (document.visibilityState === 'visible') { checkCatalogUpdate(); pullSync(); } };
@@ -75,6 +79,9 @@ export function App() {
       case 'settings': screen = <Settings />; break;
     }
   }
+
+  if (!onboarded) return <Onboarding />;
+  if (needsAuth) return <AuthScreen />;
 
   return (
     <div className="app">

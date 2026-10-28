@@ -355,6 +355,7 @@ class Repository(context: Context, val api: Api = Api()) {
         val (code, updatedAt) = api.createList(data)
         _state.update { it.copy(sync = SyncState(code, updatedAt, false), syncBase = data) }
         persist()
+        linkAccountList(code)
         return code
     }
 
@@ -375,12 +376,90 @@ class Repository(context: Context, val api: Api = Api()) {
         applyRemote(merged, remote.data, SyncState(code, remote.updatedAt, false))
         upsertMe(name)
         syncPlan()
+        linkAccountList(code)
     }
 
     fun leaveSync() {
         _state.update { it.copy(sync = SyncState(), syncBase = null) }
         persist()
+        // Con cuenta siempre tienes una lista: al salir de la compartida, empiezas una tuya con lo que hay aquí
+        _state.value.auth?.let { a -> scope.launch { runCatching { createSync(a.user.name) } } }
     }
+
+    // --- Cuenta ---
+    private fun setAuth(auth: Session?) {
+        _state.update { it.copy(auth = auth) }
+        persist()
+    }
+
+    /** La cuenta recuerda en qué lista está, para encontrarla al entrar desde otro móvil. */
+    private fun linkAccountList(code: String) {
+        val a = _state.value.auth ?: return
+        if (a.user.listCode == code) return
+        scope.launch { runCatching { api.updateMe(a.token, listCode = code) }.onSuccess { u -> setAuth(a.copy(user = u)) } }
+    }
+
+    /** Tras entrar o registrarse: yo soy la cuenta, y la cuenta tiene su lista. */
+    private suspend fun adoptSession(s: Session) {
+        _state.update { it.copy(auth = s, meId = s.user.id, guest = false) }
+        persist()
+        val code = s.user.listCode
+        if (code != null && code != _state.value.sync.code) {
+            if (runCatching { joinSync(code, s.user.name) }.isSuccess) return
+        }
+        val current = _state.value.sync.code
+        if (current != null) { upsertMe(s.user.name); linkAccountList(current); return }
+        createSync(s.user.name)
+    }
+
+    suspend fun register(name: String, email: String, password: String) =
+        adoptSession(api.register(name.trim(), email.trim(), password, _state.value.meId, _state.value.sync.code))
+
+    suspend fun login(email: String, password: String) = adoptSession(api.login(email.trim(), password))
+
+    /** Cierra la sesión en este móvil. La cesta se queda aquí, pero deja de sincronizarse. */
+    fun logout() {
+        _state.update { it.copy(auth = null, sync = SyncState(), syncBase = null, guest = false) }
+        persist()
+    }
+
+    suspend fun logoutEverywhere() {
+        val a = _state.value.auth ?: return
+        setAuth(api.logoutAll(a.token))
+    }
+
+    suspend fun changePassword(current: String, next: String) {
+        val a = _state.value.auth ?: return
+        setAuth(api.changePassword(a.token, current, next))
+    }
+
+    suspend fun renameAccount(name: String) {
+        val a = _state.value.auth ?: return
+        val u = api.updateMe(a.token, name = name.trim())
+        setAuth(a.copy(user = u))
+        upsertMe(u.name)
+    }
+
+    suspend fun deleteAccount(password: String) {
+        val a = _state.value.auth ?: return
+        api.deleteAccount(a.token, password)
+        logout()
+    }
+
+    /** Comprueba la sesión al abrir: si la revocaron (cambio de contraseña, "cerrar en todos"), sale. */
+    suspend fun refreshAccount() {
+        val a = _state.value.auth ?: return
+        try {
+            val u = api.me(a.token)
+            setAuth(a.copy(user = u))
+        } catch (e: AuthException) {
+            if (e.code == 401) { logout(); toast("Tu sesión ha caducado. Vuelve a entrar.") }
+        } catch (_: Exception) { /* sin red */ }
+    }
+
+    fun finishOnboarding() { _state.update { it.copy(onboarded = true) }; persist() }
+    fun continueAsGuest() { _state.update { it.copy(guest = true) }; persist() }
+    fun wantAccount() { _state.update { it.copy(guest = false) }; persist() }
 
     // --- Planes de cenas ---
     suspend fun generatePlan(prefs: PlanPrefs): MealPlan {

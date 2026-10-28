@@ -2,7 +2,7 @@ import { useSyncExternalStore } from 'react';
 import { api } from './api';
 import { uid } from './lib';
 import { MEMBER_HUES, merge3, splitByWeights, splitEqual } from './share';
-import type { Catalog, Category, Expense, ListData, MealPlan, Member, PlanPrefs, Product, SavedBasket, Section, SplitMode, Subcategory } from './types';
+import type { Catalog, Category, Expense, ListData, MealPlan, Member, PlanPrefs, Product, SavedBasket, Section, Session, SplitMode, Subcategory } from './types';
 
 export type ThemePref = 'system' | 'light' | 'dark';
 
@@ -35,6 +35,12 @@ export interface State {
   meId: string | null;
   /** Última versión de la lista que vimos en el servidor: la base de la fusión a tres bandas. */
   syncBase: ListData | null;
+  /** Sesión de la cuenta (null = sin cuenta). */
+  auth: Session | null;
+  /** Ya vio la presentación de la app. */
+  onboarded: boolean;
+  /** Eligió seguir sin cuenta. */
+  guest: boolean;
 }
 
 function load<T>(key: string, fallback: T): T {
@@ -65,6 +71,9 @@ let state: State = {
   expenses: load('listproExpenses', []),
   meId: load<string | null>('listproMeId', null),
   syncBase: load<ListData | null>('listproSyncBase', null),
+  auth: load<Session | null>('listproAuth', null),
+  onboarded: load('listproOnboarded', false),
+  guest: load('listproGuest', false),
 };
 
 const listeners = new Set<() => void>();
@@ -482,6 +491,7 @@ export async function createSync(name: string) {
   const r = await api.createList(data);
   setBase(data);
   setSync({ code: r.code, updatedAt: r.updatedAt, dirty: false });
+  linkAccountList(r.code);
 }
 
 export const validCode = (raw: string) => /^[A-Z2-9]{8}$/.test(raw.trim().toUpperCase());
@@ -502,11 +512,14 @@ export async function joinSync(raw: string, name: string) {
   setBase(remote.data);
   setSync({ code, updatedAt: remote.updatedAt, dirty: false });
   upsertMe(name);
+  linkAccountList(code);
 }
 
 export function leaveSync() {
   setSync({ code: null, updatedAt: null, dirty: false });
   setBase(null);
+  // Con cuenta, siempre tienes una lista: al salir de la compartida, empiezas una tuya con lo que hay aquí
+  if (state.auth) createSync(state.auth.user.name).catch(() => {});
 }
 
 // --- Planes de cenas ---
@@ -545,4 +558,105 @@ export function addPlanToBasket(items: { productId: string; packs: number }[]) {
   set({ basket, addedPrices, addedBy });
   persistList();
   return n;
+}
+
+// --- Cuenta ---
+function setAuth(auth: Session | null) {
+  set({ auth });
+  save('listproAuth', auth);
+}
+
+/** La cuenta recuerda en qué lista está, para encontrarla al entrar desde otro móvil. */
+function linkAccountList(code: string) {
+  const a = state.auth;
+  if (!a || a.user.listCode === code) return;
+  api.updateMe(a.token, { listCode: code })
+    .then((user) => setAuth({ ...a, user }))
+    .catch(() => {});
+}
+
+/** Tras entrar o registrarse: yo soy la cuenta, y la cuenta tiene su lista. */
+async function adoptSession(s: Session) {
+  setAuth(s);
+  setMe(s.user.id);
+  set({ guest: false });
+  save('listproGuest', false);
+  const code = s.user.listCode;
+  if (code && code !== state.sync.code) {
+    try { await joinSync(code, s.user.name); return; } catch { /* la lista ya no existe: abajo se crea otra */ }
+  }
+  if (state.sync.code) { upsertMe(s.user.name); linkAccountList(state.sync.code); return; }
+  await createSync(s.user.name);
+}
+
+export async function register(name: string, email: string, password: string) {
+  const s = await api.register({ name, email, password, memberId: state.meId, listCode: state.sync.code });
+  await adoptSession(s);
+}
+
+export async function login(email: string, password: string) {
+  await adoptSession(await api.login(email, password));
+}
+
+/** Cierra la sesión en este dispositivo. La lista y los datos se quedan aquí, pero ya sin sincronizar. */
+export function logout() {
+  setAuth(null);
+  setSync({ code: null, updatedAt: null, dirty: false });
+  setBase(null);
+  set({ guest: false });
+  save('listproGuest', false);
+}
+
+export async function logoutEverywhere() {
+  const a = state.auth;
+  if (!a) return;
+  setAuth(await api.logoutAll(a.token));
+}
+
+export async function changePassword(current: string, next: string) {
+  const a = state.auth;
+  if (!a) return;
+  setAuth(await api.changePassword(a.token, current, next));
+}
+
+export async function renameAccount(name: string) {
+  const a = state.auth;
+  if (!a) return;
+  const user = await api.updateMe(a.token, { name });
+  setAuth({ ...a, user });
+  upsertMe(user.name);
+}
+
+export async function deleteAccount(password: string) {
+  const a = state.auth;
+  if (!a) return;
+  await api.deleteAccount(a.token, password);
+  logout();
+}
+
+/** Comprueba la sesión al abrir: si la revocaron (cambio de contraseña, "cerrar en todos"), sale. */
+export async function refreshAccount() {
+  const a = state.auth;
+  if (!a) return;
+  try {
+    const user = await api.me(a.token);
+    setAuth({ ...a, user });
+  } catch (e) {
+    if ((e as { status?: number }).status === 401) { logout(); toast('Tu sesión ha caducado. Vuelve a entrar.'); }
+  }
+}
+
+export function finishOnboarding() {
+  set({ onboarded: true });
+  save('listproOnboarded', true);
+}
+
+export function continueAsGuest() {
+  set({ guest: true });
+  save('listproGuest', true);
+}
+
+export function wantAccount() {
+  set({ guest: false });
+  save('listproGuest', false);
 }

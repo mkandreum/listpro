@@ -52,7 +52,10 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.listpro.xyon.pro.nfc.NfcProtocol
 import com.listpro.xyon.pro.ui.AppViewModel
+import com.listpro.xyon.pro.ui.AccountPanel
 import com.listpro.xyon.pro.ui.AccountsContent
+import com.listpro.xyon.pro.ui.AuthScreen
+import com.listpro.xyon.pro.ui.OnboardingScreen
 import com.listpro.xyon.pro.ui.BasketScreen
 import com.listpro.xyon.pro.ui.CheckoutSheet
 import com.listpro.xyon.pro.ui.ShareSheet
@@ -163,6 +166,10 @@ private fun App(vm: AppViewModel, nfcAvailable: Boolean) {
             .onSuccess { vm.repo.toast("Datos restaurados") }.onFailure { vm.repo.toast("Ese archivo no es una copia de ListPro") }
     }
 
+    // Primera vez: presentación; luego, crear cuenta o entrar (o seguir sin cuenta)
+    if (!state.onboarded) { OnboardingScreen(idx) { vm.repo.finishOnboarding() }; return }
+    if (state.auth == null && !state.guest) { AuthScreen(vm, idx); return }
+
     BackHandler(enabled = vm.backStack.size > 1) { vm.back() }
 
     Box(Modifier.fillMaxSize().background(c.ground)) {
@@ -207,9 +214,10 @@ private fun App(vm: AppViewModel, nfcAvailable: Boolean) {
                     onDelete = { id -> vm.repo.deleteBasket(id); vm.repo.toast("Cesta borrada") },
                     onGoShop = { vm.selectTab(Tab.Products) },
                 )
-                Route.Stats -> StatsScreen(idx, state.list.savedBaskets, state.sync.code != null, { AccountsContent(vm, state) }) { vm.selectTab(Tab.Basket) }
+                Route.Stats -> StatsScreen(idx, state.list.savedBaskets, state.sync.code != null && state.list.members.size > 1, { AccountsContent(vm, state) }) { vm.selectTab(Tab.Basket) }
                 Route.Settings -> SettingsScreen(
                     idx, state.sync, state.list.members.size, state.theme,
+                    account = { AccountPanel(vm, state) },
                     onShare = { vm.showShare(true) },
                     onTheme = vm.repo::setTheme,
                     onRefresh = { vm.refresh(); vm.repo.toast("Comprobando precios…") },

@@ -99,3 +99,11 @@ ListPro es un producto desarrollado y mantenido por **Xyon Platforms**, empresa 
 - Si dos personas tocan la lista a la vez, la sincronización junta los cambios con una fusión a tres bandas (cada cliente guarda la última versión vista en el servidor), así no se pisan.
 - **Terminar compra** guarda lo que está en el carro (lo demás se queda en la cesta) y, si se quiere, lo reparte: a partes iguales, por producto (cada uno lo que pidió) o sin repartir.
 - La pestaña **Gastos → Cuentas** muestra el saldo de cada uno, los pagos mínimos para quedar en paz y el historial. ListPro no mueve dinero: «Saldar» solo apunta el pago.
+
+## Cuentas
+
+- Registro e inicio de sesión con email y contraseña, con el mismo patrón que Puchero y XyonWork: bcrypt (coste 12), JWT HS256 de 90 días con `tokenVersion` para revocar sesiones, límites de intentos y errores que no delatan qué emails existen.
+- Cada cuenta apunta a su lista (`list_code`): al entrar desde otro móvil se recupera la cesta, el historial y las cuentas compartidas. El id de la cuenta es también el id de miembro en la lista.
+- Rutas: `POST /api/auth/register`, `POST /api/auth/login`, `GET/PUT/DELETE /api/me`, `PUT /api/me/password`, `POST /api/auth/logout-all`.
+- `JWT_SECRET` es opcional: si no está, el servidor genera uno y lo guarda en la base de datos del volumen.
+- La primera vez la app enseña una presentación de tres pasos y luego pide crear cuenta o entrar; se puede seguir sin cuenta.

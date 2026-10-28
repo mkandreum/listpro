@@ -7,7 +7,7 @@ import { useStore } from '../store';
 import { Empty } from '../components/Chrome';
 
 export function Stats() {
-  const shared = useStore((s) => s.sync.code != null);
+  const shared = useStore((s) => s.sync.code != null && s.members.length > 1);
   const [view, setView] = useState<'accounts' | 'stats'>(shared ? 'accounts' : 'stats');
   return (
     <>

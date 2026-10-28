@@ -12,7 +12,7 @@ import { useTweened } from '../fx/motion';
 const day = (iso: string) => new Date(iso).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
 
 export function Accounts() {
-  const shared = useStore((s) => s.sync.code != null);
+  const shared = useStore((s) => s.sync.code != null && s.members.length > 1);
   const members = useStore((s) => s.members);
   const meId = useStore((s) => s.meId);
   const expenses = useStore((s) => s.expenses);

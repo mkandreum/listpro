@@ -52,7 +52,7 @@ export function AvatarStack({ members, max = 4, size = 30 }: { members: Member[]
 export function SharePill({ onClick }: { onClick: () => void }) {
   const code = useStore((s) => s.sync.code);
   const members = useStore((s) => s.members);
-  return code ? (
+  return code && members.length > 1 ? (
     <button className="share-pill glass" onClick={onClick} aria-label={`Lista compartida con ${members.length} personas`}>
       <AvatarStack members={members} max={3} size={28} />
       <span className="live" aria-hidden />
@@ -154,10 +154,11 @@ function SharedView({ code, updatedAt, onClose }: { code: string; updatedAt: str
   const [editing, setEditing] = useState(!me);
   const [name, setName] = useState(me?.name ?? '');
   const [leaving, setLeaving] = useState(false);
+  const signedIn = useStore((s) => s.auth != null);
 
   return (
     <>
-      <h2 className="share-title" style={{ marginTop: 4 }}>Lista compartida</h2>
+      <h2 className="share-title" style={{ marginTop: 4 }}>{members.length > 1 ? 'Lista compartida' : 'Comparte tu lista'}</h2>
       <p className="muted center-text small"><span className="pulse-dot" /> En directo · sincronizada {relativeTime(updatedAt)}</p>
 
       <button className="code big-code" onClick={() => navigator.clipboard?.writeText(code).then(() => { haptic.tick(); toast('Código copiado'); })} aria-label={`Copiar código ${code.split('').join(' ')}`}>
@@ -188,7 +189,7 @@ function SharedView({ code, updatedAt, onClose }: { code: string; updatedAt: str
         )}
       </ul>
 
-      <div style={{ marginTop: 22 }}>
+      {(!signedIn || members.length > 1) && <div style={{ marginTop: 22 }}>
         {leaving ? (
           <div className="confirm-row">
             <span className="small muted">Dejarás de ver los cambios de los demás en este dispositivo.</span>
@@ -200,7 +201,7 @@ function SharedView({ code, updatedAt, onClose }: { code: string; updatedAt: str
         ) : (
           <button className="btn danger block" onClick={() => setLeaving(true)}><LogOut size={18} /> Salir de la lista en este dispositivo</button>
         )}
-      </div>
+      </div>}
     </>
   );
 }

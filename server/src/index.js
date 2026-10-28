@@ -7,6 +7,10 @@ import { db, getMeta } from './db.js';
 import { getCatalog, getPriceHistory } from './catalog.js';
 import { isScraping, scheduleScraping, scrapeCatalog } from './scraper.js';
 import { createPlan, getPlan, plannerOptions, PlannerError } from './planner.js';
+import {
+  checkPassword, cleanName, CODE_RE, createUser, findByEmail, hashPassword, normalizeEmail, PASSWORD_MAX, PASSWORD_MIN,
+  rateLimit, requireAuth, signSession, toUser, validEmail,
+} from './auth.js';
 
 const PORT = Number(process.env.PORT ?? 3000);
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN ?? '';
@@ -21,7 +25,7 @@ app.use(express.json({ limit: '1mb' }));
 app.use('/api', (req, res, next) => {
   res.set('Access-Control-Allow-Origin', '*');
   res.set('Access-Control-Allow-Headers', 'Content-Type, If-None-Match, Authorization');
-  res.set('Access-Control-Allow-Methods', 'GET, PUT, POST, OPTIONS');
+  res.set('Access-Control-Allow-Methods', 'GET, PUT, POST, DELETE, OPTIONS');
   if (req.method === 'OPTIONS') return res.sendStatus(204);
   next();
 });
@@ -53,7 +57,6 @@ app.get('/api/products/:id/history', (req, res) => {
 });
 
 // --- Listas compartidas: la misma cesta en el móvil, en la web y en el móvil de tu pareja ---
-const CODE_RE = /^[A-Z2-9]{8}$/;
 const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const newCode = () => Array.from(crypto.randomBytes(8), (b) => ALPHABET[b % ALPHABET.length]).join('');
 
@@ -91,6 +94,80 @@ app.put('/api/lists/:code', (req, res) => {
   const now = new Date().toISOString();
   db.prepare('UPDATE lists SET data = ?, updated_at = ? WHERE code = ?').run(JSON.stringify(req.body.data), now, code);
   res.json({ code, updatedAt: now });
+});
+
+// --- Cuentas ---
+const ip = (req) => req.ip || 'x';
+const authLimit = rateLimit(10, 15 * 60_000, (req) => `${ip(req)}:${normalizeEmail(req.body?.email)}`, 'Demasiados intentos. Espera unos minutos.');
+const registerLimit = rateLimit(5, 60 * 60_000, ip, 'Demasiadas cuentas nuevas desde aquí. Prueba más tarde.');
+const session = (res, u, status = 200) => res.status(status).json({ token: signSession(u), user: toUser(u) });
+const listExists = (code) => CODE_RE.test(code ?? '') && !!db.prepare('SELECT 1 FROM lists WHERE code = ?').get(code);
+
+app.post('/api/auth/register', registerLimit, async (req, res) => {
+  const name = cleanName(req.body?.name);
+  const email = normalizeEmail(req.body?.email);
+  const password = typeof req.body?.password === 'string' ? req.body.password : '';
+  if (!name) return res.status(400).json({ error: 'Dinos cómo te llamas.' });
+  if (!validEmail(email)) return res.status(400).json({ error: 'Ese email no parece un email.' });
+  if (password.length < PASSWORD_MIN || password.length > PASSWORD_MAX)
+    return res.status(400).json({ error: `La contraseña necesita al menos ${PASSWORD_MIN} caracteres.` });
+  if (findByEmail(email)) return res.status(409).json({ error: 'Ya hay una cuenta con ese email. Entra con ella.' });
+  const listCode = typeof req.body?.listCode === 'string' ? req.body.listCode.toUpperCase() : null;
+  try {
+    const u = createUser({ id: req.body?.memberId, name, email, passwordHash: await hashPassword(password), listCode: listExists(listCode) ? listCode : null });
+    session(res, u, 201);
+  } catch (e) {
+    if (String(e?.message).includes('UNIQUE')) return res.status(409).json({ error: 'Ya hay una cuenta con ese email. Entra con ella.' });
+    console.error('[auth]', e);
+    res.status(500).json({ error: 'No se ha podido crear la cuenta. Prueba otra vez.' });
+  }
+});
+
+app.post('/api/auth/login', authLimit, async (req, res) => {
+  const email = normalizeEmail(req.body?.email);
+  const password = typeof req.body?.password === 'string' ? req.body.password.slice(0, PASSWORD_MAX) : '';
+  const u = email ? findByEmail(email) : null;
+  if (!(await checkPassword(u, password))) return res.status(401).json({ error: 'Email o contraseña incorrectos.' });
+  session(res, u);
+});
+
+app.get('/api/me', requireAuth, (req, res) => res.json(toUser(req.user)));
+
+/** Cambiar el nombre o la lista a la que apunta la cuenta (al crear o unirse a una lista compartida). */
+app.put('/api/me', requireAuth, (req, res) => {
+  const name = req.body?.name === undefined ? req.user.name : cleanName(req.body.name);
+  if (!name) return res.status(400).json({ error: 'Dinos cómo te llamas.' });
+  let code = req.user.list_code;
+  if (req.body?.listCode !== undefined) {
+    const next = req.body.listCode === null ? null : String(req.body.listCode).toUpperCase();
+    if (next !== null && !listExists(next)) return res.status(400).json({ error: 'Esa lista no existe.' });
+    code = next;
+  }
+  db.prepare('UPDATE users SET name = ?, list_code = ? WHERE id = ?').run(name, code, req.user.id);
+  res.json(toUser({ ...req.user, name, list_code: code }));
+});
+
+app.put('/api/me/password', requireAuth, authLimit, async (req, res) => {
+  if (!(await checkPassword(req.user, String(req.body?.current || ''))))
+    return res.status(403).json({ error: 'La contraseña actual no es correcta.' });
+  const next = typeof req.body?.next === 'string' ? req.body.next : '';
+  if (next.length < PASSWORD_MIN || next.length > PASSWORD_MAX)
+    return res.status(400).json({ error: `La nueva necesita al menos ${PASSWORD_MIN} caracteres.` });
+  // Contraseña nueva: se cierran las demás sesiones y este dispositivo recibe una nueva.
+  db.prepare('UPDATE users SET password_hash = ?, token_version = token_version + 1 WHERE id = ?').run(await hashPassword(next), req.user.id);
+  session(res, { ...req.user, token_version: req.user.token_version + 1 });
+});
+
+app.post('/api/auth/logout-all', requireAuth, (req, res) => {
+  db.prepare('UPDATE users SET token_version = token_version + 1 WHERE id = ?').run(req.user.id);
+  session(res, { ...req.user, token_version: req.user.token_version + 1 });
+});
+
+app.delete('/api/me', requireAuth, authLimit, async (req, res) => {
+  if (!(await checkPassword(req.user, String(req.body?.password || ''))))
+    return res.status(403).json({ error: 'La contraseña no es correcta.' });
+  db.prepare('DELETE FROM users WHERE id = ?').run(req.user.id);
+  res.status(204).end();
 });
 
 // --- Planes de cenas con IA ---

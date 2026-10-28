@@ -57,6 +57,17 @@ db.exec(`
     data TEXT NOT NULL,
     updated_at TEXT NOT NULL
   );
+
+  -- Cuentas: cada una apunta a su lista (la propia o la compartida a la que se unió)
+  CREATE TABLE IF NOT EXISTS users (
+    id TEXT PRIMARY KEY,
+    email TEXT NOT NULL UNIQUE,
+    name TEXT NOT NULL,
+    password_hash TEXT NOT NULL,
+    token_version INTEGER NOT NULL DEFAULT 0,
+    list_code TEXT,
+    created_at TEXT NOT NULL
+  );
 `);
 
 export function getMeta(key) {

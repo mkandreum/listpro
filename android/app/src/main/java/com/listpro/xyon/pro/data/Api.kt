@@ -13,6 +13,7 @@ import java.io.IOException
 import java.util.concurrent.TimeUnit
 
 class HttpException(val code: Int, val body: String?) : IOException("HTTP $code")
+class AuthException(val code: Int, message: String) : IOException(message)
 
 /** Cliente de la API de ListPro (la misma que usa la web). */
 class Api(private val base: String = BuildConfig.API_BASE) {
@@ -69,6 +70,49 @@ class Api(private val base: String = BuildConfig.API_BASE) {
             }
             json.decodeFromString(MealPlan.serializer(), text)
         }
+    }
+
+    // --- Cuentas ---
+    @Serializable private data class RegisterBody(val name: String, val email: String, val password: String, val memberId: String?, val listCode: String?)
+    @Serializable private data class LoginBody(val email: String, val password: String)
+    @Serializable private data class MeBody(val name: String? = null, val listCode: String? = null)
+    @Serializable private data class PasswordBody(val current: String, val next: String)
+    @Serializable private data class DeleteBody(val password: String)
+
+    /** Llamada con la sesión; si falla, la excepción lleva el mensaje del servidor listo para enseñarlo. */
+    private suspend fun authed(method: String, path: String, body: String?, token: String?): String = withContext(Dispatchers.IO) {
+        val req = Request.Builder().url(base + path)
+            .method(method, body?.toRequestBody(jsonType) ?: if (method == "GET") null else "{}".toRequestBody(jsonType))
+            .apply { token?.let { header("Authorization", "Bearer $it") } }
+            .build()
+        client.newCall(req).execute().use { res ->
+            val text = res.body?.string().orEmpty()
+            if (!res.isSuccessful) {
+                val msg = runCatching { json.decodeFromString(ApiError.serializer(), text).error }.getOrNull()
+                throw AuthException(res.code, msg?.takeIf { it.isNotBlank() } ?: "No se pudo conectar. Prueba otra vez.")
+            }
+            text
+        }
+    }
+
+    suspend fun register(name: String, email: String, password: String, memberId: String?, listCode: String?): Session =
+        json.decodeFromString(Session.serializer(), authed("POST", "/api/auth/register", json.encodeToString(RegisterBody.serializer(), RegisterBody(name, email, password, memberId, listCode)), null))
+
+    suspend fun login(email: String, password: String): Session =
+        json.decodeFromString(Session.serializer(), authed("POST", "/api/auth/login", json.encodeToString(LoginBody.serializer(), LoginBody(email, password)), null))
+
+    suspend fun me(token: String): User = json.decodeFromString(User.serializer(), authed("GET", "/api/me", null, token))
+
+    suspend fun updateMe(token: String, name: String? = null, listCode: String? = null): User =
+        json.decodeFromString(User.serializer(), authed("PUT", "/api/me", json.encodeToString(MeBody.serializer(), MeBody(name, listCode)), token))
+
+    suspend fun changePassword(token: String, current: String, next: String): Session =
+        json.decodeFromString(Session.serializer(), authed("PUT", "/api/me/password", json.encodeToString(PasswordBody.serializer(), PasswordBody(current, next)), token))
+
+    suspend fun logoutAll(token: String): Session = json.decodeFromString(Session.serializer(), authed("POST", "/api/auth/logout-all", null, token))
+
+    suspend fun deleteAccount(token: String, password: String) {
+        authed("DELETE", "/api/me", json.encodeToString(DeleteBody.serializer(), DeleteBody(password)), token)
     }
 
     @Serializable private data class Created(val code: String, val updatedAt: String)
