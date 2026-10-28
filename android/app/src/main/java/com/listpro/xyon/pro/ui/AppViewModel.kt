@@ -48,6 +48,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private val _nfcListening = MutableStateFlow(false)
     val nfcListening = _nfcListening.asStateFlow()
 
+    /** Hoja de compartir: se abre desde la cesta, desde Gastos o desde Ajustes. */
+    private val _shareOpen = MutableStateFlow(false)
+    val shareOpen = _shareOpen.asStateFlow()
+    fun showShare(open: Boolean) { _shareOpen.value = open }
+
     fun open(route: Route) {
         if (route is Route.Search && current is Route.Search) backStack[backStack.lastIndex] = route
         else backStack.add(route)
@@ -97,14 +102,15 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     // --- NFC ---
     /** Para compartir hace falta un código: si no hay, se crea antes de acercar los móviles. */
-    fun prepareNfcShare() = runAction("Acerca el otro móvil por detrás") {
-        if (state.value.sync.code == null) repo.createSync()
-    }
+    fun prepareNfcShare() = repo.toast("Acerca el otro móvil por detrás")
 
-    fun setNfcListening(on: Boolean) { _nfcListening.value = on }
+    /** Nombre con el que me apunto si recibo la lista por NFC. */
+    private var nfcName = ""
+    fun setNfcListening(on: Boolean, name: String = nfcName) { nfcName = name; _nfcListening.value = on }
 
     fun onNfcCode(code: String) {
         _nfcListening.value = false
-        runAction("Lista recibida por NFC") { repo.joinSync(code) }
+        val name = nfcName.ifBlank { state.value.list.members.find { it.id == state.value.meId }?.name ?: "Yo" }
+        runAction("Ya estás dentro de la lista") { repo.joinSync(code, name) }
     }
 }

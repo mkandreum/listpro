@@ -103,22 +103,35 @@ class Repository(context: Context, val api: Api = Api()) {
         markDirty()
     }
 
+    val isShared: Boolean get() = _state.value.sync.code != null
+
+    /** Si la lista es compartida, apunta que este producto lo he pedido yo. */
+    private fun ListData.claim(id: String): Map<String, String> {
+        val me = _state.value.meId
+        return if (me != null && isShared && (basket[id] ?: 0) == 0) addedBy + (id to me) else addedBy
+    }
+
     fun changeQty(id: String, delta: Int) = editList { l ->
         val next = ((l.basket[id] ?: 0) + delta).coerceAtLeast(0)
         if (next == 0) {
-            l.copy(basket = l.basket - id, addedPrices = l.addedPrices - id, inCart = l.inCart - id)
+            l.copy(basket = l.basket - id, addedPrices = l.addedPrices - id, inCart = l.inCart - id, addedBy = l.addedBy - id, pickedBy = l.pickedBy - id)
         } else {
             val price = _catalog.value?.products?.get(id)?.price
             l.copy(
                 basket = l.basket + (id to next),
                 addedPrices = if (price != null && id !in l.addedPrices) l.addedPrices + (id to price) else l.addedPrices,
+                addedBy = l.claim(id),
             )
         }
     }
 
-    fun toggleInCart(id: String) = editList { l -> l.copy(inCart = if (id in l.inCart) l.inCart - id else l.inCart + id) }
+    fun toggleInCart(id: String) = editList { l ->
+        val me = _state.value.meId
+        if (id in l.inCart) l.copy(inCart = l.inCart - id, pickedBy = l.pickedBy - id)
+        else l.copy(inCart = l.inCart + id, pickedBy = if (me != null) l.pickedBy + (id to me) else l.pickedBy)
+    }
 
-    fun clearBasket() = editList { it.copy(basket = emptyMap(), addedPrices = emptyMap(), inCart = emptyList()) }
+    fun clearBasket() = editList { it.copy(basket = emptyMap(), addedPrices = emptyMap(), inCart = emptyList(), addedBy = emptyMap(), pickedBy = emptyMap()) }
 
     fun dropMissing() = editList { l -> l.copy(basket = l.basket.filterKeys { _catalog.value?.products?.containsKey(it) == true }) }
 
@@ -128,19 +141,86 @@ class Repository(context: Context, val api: Api = Api()) {
             .sortedWith(compareBy({ idx.aisleOrder[it.product.subcategory] ?: Int.MAX_VALUE }, { it.product.name }))
     }
 
-    fun saveBasket(name: String): Boolean {
+    /** Lo que entra en la compra: si has marcado algo, solo lo marcado (lo demás se queda en la cesta); si no, todo. */
+    fun checkoutLines(): List<BasketLine> {
         val lines = basketLines()
+        val picked = lines.filter { it.product.id in _state.value.list.inCart }
+        return picked.ifEmpty { lines }
+    }
+
+    /** Cuánto le toca a cada uno. Con "por producto", lo que pidió cada uno; lo que no es de nadie, a partes iguales. */
+    fun purchaseShares(amount: Double, mode: String, among: List<String>): Map<String, Double> {
+        if (among.isEmpty()) return emptyMap()
+        if (mode == "equal") return splitEqual(amount, among)
+        val w = among.associateWith { 0.0 }.toMutableMap()
+        val addedBy = _state.value.list.addedBy
+        checkoutLines().forEach { l ->
+            val cost = l.product.price * l.qty
+            val who = addedBy[l.product.id]
+            if (who != null && who in w) w[who] = w.getValue(who) + cost
+            else among.forEach { m -> w[m] = w.getValue(m) + cost / among.size }
+        }
+        return splitByWeights(amount, w)
+    }
+
+    /** Guarda la compra en el historial, la quita de la cesta y, si se reparte, la apunta en las cuentas. */
+    fun finishShop(name: String, amount: Double, paidBy: String?, mode: String?, among: List<String>): Boolean {
+        val lines = checkoutLines()
         if (lines.isEmpty()) return false
+        val now = Instant.now().toString()
         val basket = SavedBasket(
-            id = UUID.randomUUID().toString().take(12),
+            id = newId(),
             name = name,
-            date = Instant.now().toString(),
+            date = now,
             total = round(lines.sumOf { it.product.price * it.qty } * 100) / 100,
             items = lines.associate { it.product.id to it.qty },
             snapshot = lines.associate { it.product.id to SnapshotItem(it.product.name, it.product.price, it.product.section, it.product.category) },
         )
-        editList { it.copy(savedBaskets = it.savedBaskets + basket, basket = emptyMap(), addedPrices = emptyMap(), inCart = emptyList()) }
+        val ids = lines.map { it.product.id }.toSet()
+        val expense = if (isShared && paidBy != null && mode != null && among.isNotEmpty() && amount > 0) Expense(
+            id = newId(), at = now, title = name, amount = round(amount * 100) / 100, paidBy = paidBy,
+            shares = purchaseShares(amount, mode, among), kind = "purchase", mode = mode, basketId = basket.id,
+        ) else null
+        editList {
+            it.copy(
+                savedBaskets = it.savedBaskets + basket,
+                basket = it.basket - ids, addedPrices = it.addedPrices - ids, inCart = it.inCart - ids,
+                addedBy = it.addedBy - ids, pickedBy = it.pickedBy - ids,
+                expenses = if (expense != null) it.expenses + expense else it.expenses,
+            )
+        }
         return true
+    }
+
+    private fun newId() = UUID.randomUUID().toString().replace("-", "").take(12)
+
+    // --- Cuentas ---
+    fun addExpense(title: String, amount: Double, paidBy: String, among: List<String>) = editList {
+        val a = round(amount * 100) / 100
+        it.copy(expenses = it.expenses + Expense(newId(), Instant.now().toString(), title, a, paidBy, splitEqual(a, among), "purchase", "equal"))
+    }
+
+    /** Apunta que `from` le ha pagado `amount` a `to`. */
+    fun settleUp(from: String, to: String, amount: Double) = editList {
+        it.copy(expenses = it.expenses + Expense(newId(), Instant.now().toString(), "Pago", amount, from, mapOf(to to amount), "settle"))
+    }
+
+    fun deleteExpense(id: String) = editList { l -> l.copy(expenses = l.expenses.filterNot { it.id == id }) }
+
+    // --- Miembros ---
+    /** Me apunta (o me renombra) en la lista con este nombre. */
+    fun upsertMe(name: String) {
+        val clean = name.trim().take(24)
+        if (clean.isEmpty()) return
+        val meId = _state.value.meId ?: newId().also { id -> _state.update { it.copy(meId = id) } }
+        editList { l ->
+            if (l.members.any { it.id == meId }) l.copy(members = l.members.map { if (it.id == meId) it.copy(name = clean) else it })
+            else {
+                val used = l.members.map { it.hue }.toSet()
+                val hue = MEMBER_HUES.firstOrNull { it !in used } ?: MEMBER_HUES[l.members.size % MEMBER_HUES.size]
+                l.copy(members = l.members + Member(meId, clean, hue, Instant.now().toString()))
+            }
+        }
     }
 
     fun reuseBasket(id: String): Int {
@@ -150,13 +230,16 @@ class Repository(context: Context, val api: Api = Api()) {
         editList { l ->
             val basket = l.basket.toMutableMap()
             val added = l.addedPrices.toMutableMap()
+            val by = l.addedBy.toMutableMap()
+            val me = _state.value.meId
             b.items.forEach { (pid, q) ->
                 val p = idx.products[pid] ?: return@forEach
+                if ((basket[pid] ?: 0) == 0 && me != null && isShared) by[pid] = me
                 basket[pid] = (basket[pid] ?: 0) + q
                 added.putIfAbsent(pid, p.price)
                 n++
             }
-            l.copy(basket = basket, addedPrices = added)
+            l.copy(basket = basket, addedPrices = added, addedBy = by)
         }
         return n
     }
@@ -191,38 +274,65 @@ class Repository(context: Context, val api: Api = Api()) {
         persist()
     }
 
+    // Cada cambio local sube la revisión: un cambio hecho mientras se sube otro no se pierde.
+    @Volatile private var rev = 0L
     private var pushJob: Job? = null
+    private val pushLock = Mutex()
+
     private fun markDirty() {
+        rev++
         val sync = _state.value.sync
         if (sync.code == null) return
         setSync(sync.copy(dirty = true))
         pushJob?.cancel()
-        pushJob = scope.launch { delay(1200); pushSync() }
+        pushJob = scope.launch { delay(700); pushSync() }
     }
 
-    // Si dos dispositivos escriben a la vez: cestas guardadas = unión por id; cesta actual = la de este dispositivo.
-    private fun mergeSaved(local: List<SavedBasket>, remote: List<SavedBasket>): List<SavedBasket> {
-        val ids = local.map { it.id }.toSet()
-        return (local + remote.filter { it.id !in ids }).sortedBy { it.date }
+    /** Pone en local lo que viene del servidor (sin marcarlo como cambio nuestro). */
+    private fun applyRemote(data: ListData, base: ListData?, sync: SyncState) {
+        _state.update { st ->
+            val plan = if (data.planId == null) null else st.plan
+            st.copy(list = data, syncBase = base, sync = sync, plan = plan)
+        }
+        persist()
     }
 
     suspend fun pushSync() {
-        val sync = _state.value.sync
-        val code = sync.code ?: return
-        if (!sync.dirty) return
-        runCatching {
-            var res = api.putList(code, _state.value.list, sync.updatedAt)
-            if (res is Api.PutResult.Conflict) {
-                val merged = mergeSaved(_state.value.list.savedBaskets, res.remote.data.savedBaskets)
-                _state.update { it.copy(list = it.list.copy(savedBaskets = merged)) }
-                res = api.putList(code, _state.value.list, null, force = true)
+        if (!pushLock.tryLock()) return
+        try {
+            val code = _state.value.sync.code ?: return
+            if (!_state.value.sync.dirty) return
+            var updatedAt = _state.value.sync.updatedAt
+            runCatching {
+                for (attempt in 0 until 4) {
+                    val sentRev = rev
+                    val sent = _state.value.list
+                    when (val res = api.putList(code, sent, updatedAt, force = attempt == 3)) {
+                        is Api.PutResult.Conflict -> {
+                            // Alguien cambió la lista mientras tanto: juntamos sus cambios con los nuestros y reintentamos
+                            val merged = merge3(_state.value.syncBase, _state.value.list, res.remote.data)
+                            applyRemote(merged, res.remote.data, _state.value.sync)
+                            updatedAt = res.remote.updatedAt
+                            continue
+                        }
+                        is Api.PutResult.Ok -> {
+                            val again = rev != sentRev
+                            applyRemote(_state.value.list, sent, SyncState(code, res.updatedAt, dirty = again))
+                            if (again) { pushJob?.cancel(); pushJob = scope.launch { delay(300); pushSync() } }
+                        }
+                        Api.PutResult.NotFound -> {
+                            toast("Esa lista compartida ya no existe")
+                            _state.update { it.copy(sync = SyncState(), syncBase = null) }
+                            persist()
+                        }
+                    }
+                    break
+                }
             }
-            when (res) {
-                is Api.PutResult.Ok -> setSync(SyncState(code, res.updatedAt, dirty = false))
-                Api.PutResult.NotFound -> { toast("Ese código de sincronización ya no existe"); setSync(SyncState()) }
-                is Api.PutResult.Conflict -> Unit
-            }
+        } finally {
+            pushLock.unlock()
         }
+        syncPlan()
     }
 
     suspend fun pullSync() {
@@ -231,38 +341,46 @@ class Repository(context: Context, val api: Api = Api()) {
         if (sync.dirty) return pushSync()
         runCatching {
             val remote = api.getList(code)
-            if (remote.updatedAt != sync.updatedAt && !_state.value.sync.dirty) {
-                _state.update { it.copy(list = remote.data, sync = SyncState(code, remote.updatedAt, false)) }
-                persist()
+            if (remote.updatedAt != sync.updatedAt && !_state.value.sync.dirty && !pushLock.isLocked) {
+                applyRemote(remote.data, remote.data, SyncState(code, remote.updatedAt, false))
                 syncPlan()
             }
         }
     }
 
-    suspend fun createSync(): String {
-        val (code, updatedAt) = api.createList(_state.value.list)
-        setSync(SyncState(code, updatedAt, false))
+    /** Crea una lista compartida con lo que hay ahora en la cesta y me apunta con mi nombre. */
+    suspend fun createSync(name: String): String {
+        upsertMe(name)
+        val data = _state.value.list
+        val (code, updatedAt) = api.createList(data)
+        _state.update { it.copy(sync = SyncState(code, updatedAt, false), syncBase = data) }
+        persist()
         return code
     }
 
-    /** Une este dispositivo a una lista. Lanza una excepción con un mensaje para el usuario si falla. */
-    suspend fun joinSync(raw: String) {
+    /** Me uno a la lista de otro: me quedo con su cesta, junto las compras guardadas y me apunto. */
+    suspend fun joinSync(raw: String, name: String) {
         val code = raw.trim().uppercase()
         require(Regex("^[A-Z2-9]{8}$").matches(code)) { "El código tiene 8 letras y números" }
+        if (code == _state.value.sync.code) return
         val remote = try {
             api.getList(code)
         } catch (e: HttpException) {
-            throw IllegalStateException(if (e.code == 404) "No existe ningún código así" else "No se pudo conectar")
+            throw IllegalStateException(if (e.code == 404) "No existe ninguna lista con ese código" else "No se pudo conectar")
         } catch (e: Exception) {
             throw IllegalStateException("No se pudo conectar")
         }
-        val merged = remote.data.copy(savedBaskets = mergeSaved(_state.value.list.savedBaskets, remote.data.savedBaskets))
-        _state.update { it.copy(list = merged, sync = SyncState(code, remote.updatedAt, dirty = true)) }
-        persist()
-        pushSync()
+        val theirs = remote.data.savedBaskets.map { it.id }.toSet()
+        val merged = remote.data.copy(savedBaskets = (remote.data.savedBaskets + _state.value.list.savedBaskets.filter { it.id !in theirs }).sortedBy { it.date })
+        applyRemote(merged, remote.data, SyncState(code, remote.updatedAt, false))
+        upsertMe(name)
+        syncPlan()
     }
 
-    fun leaveSync() = setSync(SyncState())
+    fun leaveSync() {
+        _state.update { it.copy(sync = SyncState(), syncBase = null) }
+        persist()
+    }
 
     // --- Planes de cenas ---
     suspend fun generatePlan(prefs: PlanPrefs): MealPlan {
@@ -287,13 +405,16 @@ class Repository(context: Context, val api: Api = Api()) {
         editList { l ->
             val basket = l.basket.toMutableMap()
             val added = l.addedPrices.toMutableMap()
+            val by = l.addedBy.toMutableMap()
+            val me = _state.value.meId
             items.forEach { (id, packs) ->
                 val p = idx.products[id] ?: return@forEach
+                if ((basket[id] ?: 0) == 0 && me != null && isShared) by[id] = me
                 basket[id] = maxOf(basket[id] ?: 0, packs)
                 added.putIfAbsent(id, p.price)
                 n++
             }
-            l.copy(basket = basket, addedPrices = added)
+            l.copy(basket = basket, addedPrices = added, addedBy = by)
         }
         return n
     }

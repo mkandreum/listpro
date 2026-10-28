@@ -1,11 +1,14 @@
-import { useMemo, useState } from 'react';
-import { Check, ChevronRight, RotateCcw, ShoppingBasket, Trash2, TrendingDown, TrendingUp } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Check, ChevronRight, ReceiptText, RotateCcw, ShoppingBasket, Trash2, TrendingDown, TrendingUp } from 'lucide-react';
 import { money, units } from '../lib';
-import { href } from '../router';
-import { basketLines, clearBasket, deleteBasket, dropMissing, reuseBasket, saveBasket, toast, toggleInCart, useStore } from '../store';
-import type { Product } from '../types';
+import { href, navigate } from '../router';
+import {
+  basketLines, checkoutLines, clearBasket, deleteBasket, dropMissing, finishShop, isShared, purchaseShares, reuseBasket, toast, toggleInCart, useStore,
+} from '../store';
+import type { Product, SplitMode } from '../types';
 import { Price, ProductImage, QtyControl } from '../components/ProductTag';
 import { Empty } from '../components/Chrome';
+import { Avatar, SharePill, ShareSheet, Sheet } from '../components/Share';
 import { haptic } from '../fx/haptics';
 import { useTweened } from '../fx/motion';
 
@@ -13,15 +16,27 @@ function defaultName() {
   return `Compra del ${new Date().toLocaleDateString('es-ES', { day: 'numeric', month: 'long' })}`;
 }
 
-export function Basket({ onOpen }: { onOpen: (p: Product) => void }) {
+export function Basket({ onOpen, join }: { onOpen: (p: Product) => void; join?: string }) {
   const catalog = useStore((s) => s.catalog);
   const basket = useStore((s) => s.basket);
   const addedPrices = useStore((s) => s.addedPrices);
   const inCart = useStore((s) => s.inCart);
   const idx = useStore((s) => s.idx);
   const saved = useStore((s) => s.savedBaskets);
-  const [name, setName] = useState(defaultName);
+  const members = useStore((s) => s.members);
+  const meId = useStore((s) => s.meId);
+  const addedBy = useStore((s) => s.addedBy);
+  const pickedBy = useStore((s) => s.pickedBy);
+  const shared = useStore((s) => s.sync.code != null);
   const [confirmClear, setConfirmClear] = useState(false);
+  const [sharing, setSharing] = useState(false);
+  const [checkout, setCheckout] = useState(false);
+  const member = (id?: string) => members.find((m) => m.id === id);
+  const showWho = shared && members.length > 1;
+
+  // Enlace de invitación (#/unirse/CODIGO): abre la hoja con el código ya puesto
+  useEffect(() => { if (join !== undefined) setSharing(true); }, [join]);
+  const closeShare = () => { setSharing(false); if (join !== undefined) navigate({ name: 'basket' }, true); };
 
   const lines = useMemo(() => basketLines(), [basket, idx]); // eslint-disable-line react-hooks/exhaustive-deps
   const missing = Object.keys(basket).filter((id) => catalog && !idx.products.has(id));
@@ -48,15 +63,8 @@ export function Basket({ onOpen }: { onOpen: (p: Product) => void }) {
   return (
     <>
       <div className="row-head" style={{ marginTop: 6 }}>
-        <h1 className="h-section">Tu cesta</h1>
-        {lines.length > 0 && (
-          confirmClear
-            ? <div style={{ display: 'flex', gap: 8 }}>
-                <button className="btn" onClick={() => setConfirmClear(false)}>No</button>
-                <button className="btn danger" onClick={() => { haptic.warn(); clearBasket(); setConfirmClear(false); toast('Cesta vaciada'); }}>Sí, vaciar</button>
-              </div>
-            : <button className="btn" onClick={() => setConfirmClear(true)}><Trash2 size={18} /> Vaciar</button>
-        )}
+        <h1 className="h-section">{shared ? 'Cesta común' : 'Tu cesta'}</h1>
+        <SharePill onClick={() => setSharing(true)} />
       </div>
 
       {lines.length === 0 && missing.length === 0 ? (
@@ -109,6 +117,12 @@ export function Basket({ onOpen }: { onOpen: (p: Product) => void }) {
                       <div className="info">
                         <div className="n">{p.name}</div>
                         <div className="s num">{p.size} · {money(p.price)}/ud</div>
+                        {showWho && (addedBy[p.id] || (done && pickedBy[p.id])) && (
+                          <div className="who-line">
+                            {addedBy[p.id] && <span><Avatar m={member(addedBy[p.id])} size={18} />{addedBy[p.id] === meId ? 'Lo pediste tú' : `Lo pide ${member(addedBy[p.id])?.name ?? 'alguien'}`}</span>}
+                            {done && pickedBy[p.id] && <span className="picked"><Check size={13} strokeWidth={3} />{pickedBy[p.id] === meId ? 'Lo cogiste tú' : `Lo cogió ${member(pickedBy[p.id])?.name ?? 'alguien'}`}</span>}
+                          </div>
+                        )}
                         <div className="line-foot">
                           <div className="p num">{money(p.price * qty)}</div>
                           <QtyControl id={p.id} name={p.name} />
@@ -121,18 +135,33 @@ export function Basket({ onOpen }: { onOpen: (p: Product) => void }) {
             );
           })}
 
-          <form className="save-form" onSubmit={(e) => {
-            e.preventDefault();
-            if (!name.trim()) return toast('Ponle un nombre a la cesta');
-            if (saveBasket(name.trim())) { haptic.success(); toast(`Guardada: ${name.trim()}`); setName(defaultName()); }
-          }}>
-            <label className="sr-only" htmlFor="basket-name">Nombre de la cesta</label>
-            <input id="basket-name" className="input" value={name} onChange={(e) => setName(e.target.value)} maxLength={60} />
-            <button className="btn primary" type="submit">Guardar</button>
-          </form>
-          <p className="muted small" style={{ marginTop: 8 }}>Guardar la cesta la vacía y la añade a tus gastos.</p>
+          <button className="btn primary block cta" onClick={() => { haptic.tap(); setCheckout(true); }}>
+            <ReceiptText size={20} /> {doneCount > 0 && doneCount < lines.length ? `Terminar compra (${doneCount} en el carro)` : 'Terminar compra'}
+          </button>
+          <p className="muted small center-text" style={{ marginTop: 8 }}>
+            {shared ? 'Se guarda en el historial y, si queréis, se reparte en las cuentas.' : 'Se guarda en tu historial de gastos y vacía la cesta.'}
+          </p>
+          <div className="center-text" style={{ marginTop: 14 }}>
+            {confirmClear
+              ? <div style={{ display: 'inline-flex', gap: 8 }}>
+                  <button className="btn" onClick={() => setConfirmClear(false)}>No</button>
+                  <button className="btn danger" onClick={() => { haptic.warn(); clearBasket(); setConfirmClear(false); toast('Cesta vaciada'); }}>Sí, vaciar{shared ? ' para todos' : ''}</button>
+                </div>
+              : <button className="link-btn" onClick={() => setConfirmClear(true)}><Trash2 size={16} /> Vaciar la cesta</button>}
+          </div>
         </>
       )}
+
+      {!shared && lines.length > 0 && (
+        <button className="share-promo" onClick={() => setSharing(true)}>
+          <span className="art"><ShoppingBasket size={22} /></span>
+          <span><b>¿Compráis entre varios?</b><span className="muted small">Comparte la cesta y repartid los gastos sin hacer cuentas.</span></span>
+          <ChevronRight className="chev" aria-hidden />
+        </button>
+      )}
+
+      {sharing && <ShareSheet onClose={closeShare} joinCode={join || undefined} />}
+      {checkout && <CheckoutSheet onClose={() => setCheckout(false)} />}
 
       <div className="row-head" style={{ marginTop: 40 }}>
         <h2 className="h-section">Cestas guardadas</h2>
@@ -178,5 +207,115 @@ export function Basket({ onOpen }: { onOpen: (p: Product) => void }) {
         })
       )}
     </>
+  );
+}
+
+const parseAmount = (v: string) => Number(v.replace(/\s|€/g, '').replace(',', '.'));
+const fmtAmount = (v: number) => v.toFixed(2).replace('.', ',');
+
+function CheckoutSheet({ onClose }: { onClose: () => void }) {
+  const members = useStore((s) => s.members);
+  const meId = useStore((s) => s.meId);
+  const lines = useMemo(() => checkoutLines(), []);
+  const all = basketLines().length;
+  const estimate = lines.reduce((a, l) => a + l.p.price * l.qty, 0);
+  const canSplit = isShared() && members.length > 1;
+  const [name, setName] = useState(defaultName);
+  const [amount, setAmount] = useState(fmtAmount(estimate));
+  const [paidBy, setPaidBy] = useState(meId && members.some((m) => m.id === meId) ? meId : members[0]?.id);
+  const [mode, setMode] = useState<SplitMode | 'none'>('equal');
+  const [among, setAmong] = useState(members.map((m) => m.id));
+  const value = parseAmount(amount);
+  const valid = name.trim() && Number.isFinite(value) && value > 0;
+  const shares = canSplit && mode !== 'none' && valid ? purchaseShares({ amount: value, mode, among }) : {};
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!valid) return;
+    if (canSplit && mode !== 'none' && !among.length) return toast('Elige entre quién se reparte');
+    finishShop({ name: name.trim(), amount: value, ...(canSplit && mode !== 'none' ? { paidBy, mode, among } : {}) });
+    haptic.success();
+    toast(canSplit && mode !== 'none' ? 'Compra guardada y repartida' : `Guardada: ${name.trim()}`);
+    onClose();
+  };
+
+  return (
+    <Sheet onClose={onClose} label="Terminar compra">
+      <form onSubmit={submit}>
+        <h2 className="share-title" style={{ textAlign: 'left', marginTop: 4 }}>Terminar compra</h2>
+        <p className="muted">
+          {lines.length < all
+            ? `Entran los ${lines.length} productos que están en el carro. Los otros ${all - lines.length} se quedan en la cesta.`
+            : `Entran los ${lines.length} productos de la cesta.`}
+        </p>
+
+        <label className="text-field">
+          Nombre
+          <input className="input" value={name} onChange={(e) => setName(e.target.value)} maxLength={60} />
+        </label>
+        <label className="text-field">
+          ¿Cuánto ha sido?
+          <span className="money-input">
+            <input className="input num" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} aria-describedby="amount-hint" />
+            <span>€</span>
+          </span>
+          <span id="amount-hint" className="muted small" style={{ fontWeight: 500 }}>Con los precios de hoy salen {money(estimate)}. Cámbialo si el tique dice otra cosa.</span>
+        </label>
+
+        {canSplit && (
+          <>
+            <div className="text-field">
+              ¿Quién ha pagado?
+              <div className="chips wrap">
+                {members.map((m) => (
+                  <button key={m.id} type="button" className="chip person" aria-pressed={paidBy === m.id} onClick={() => setPaidBy(m.id)}>
+                    <Avatar m={m} size={30} />{m.id === meId ? 'Yo' : m.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="text-field">
+              ¿Cómo lo repartís?
+              <div className="segmented" role="group" aria-label="Cómo repartir">
+                <button type="button" aria-pressed={mode === 'equal'} onClick={() => setMode('equal')}>A partes iguales</button>
+                <button type="button" aria-pressed={mode === 'items'} onClick={() => setMode('items')}>Por producto</button>
+                <button type="button" aria-pressed={mode === 'none'} onClick={() => setMode('none')}>No repartir</button>
+              </div>
+            </div>
+            {mode !== 'none' && (
+              <div className="text-field">
+                {mode === 'equal' ? 'Entre quién' : 'Lo que no es de nadie, entre quién'}
+                <div className="chips wrap">
+                  {members.map((m) => {
+                    const on = among.includes(m.id);
+                    return (
+                      <button key={m.id} type="button" className="chip person" aria-pressed={on}
+                        onClick={() => setAmong(on ? among.filter((x) => x !== m.id) : [...among, m.id])}>
+                        <Avatar m={m} size={30} />{m.id === meId ? 'Yo' : m.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+            {mode !== 'none' && Object.keys(shares).length > 0 && (
+              <div className="split-preview">
+                {members.filter((m) => shares[m.id]).map((m) => (
+                  <div key={m.id}>
+                    <Avatar m={m} size={26} />
+                    <span>{m.id === meId ? 'Tú' : m.name}</span>
+                    <b className="num">{money(shares[m.id])}</b>
+                  </div>
+                ))}
+                {mode === 'items' && <p className="muted small">Cada uno paga lo que añadió a la cesta; lo que no tiene dueño se reparte.</p>}
+              </div>
+            )}
+          </>
+        )}
+        {isShared() && members.length < 2 && <p className="notice">Cuando alguien más se una a la lista, podréis repartir las compras.</p>}
+
+        <button className="btn primary block cta" type="submit" disabled={!valid}><Check size={20} /> Guardar compra</button>
+      </form>
+    </Sheet>
   );
 }

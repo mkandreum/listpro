@@ -100,6 +100,28 @@ data class ListData(
     /** Plan de cenas activo y preferencias: así se ve también en los otros dispositivos. */
     val planId: String? = null,
     val planPrefs: PlanPrefs? = null,
+    /** Lista compartida: quién está, quién pidió y quién cogió cada producto, y las cuentas. */
+    val members: List<Member> = emptyList(),
+    val addedBy: Map<String, String> = emptyMap(),
+    val pickedBy: Map<String, String> = emptyMap(),
+    val expenses: List<Expense> = emptyList(),
+)
+
+@Serializable
+data class Member(val id: String, val name: String, val hue: String, val joinedAt: String)
+
+/** Un gasto o un pago entre miembros. `shares` dice cuánto le toca a cada uno (en euros) y suma `amount`. */
+@Serializable
+data class Expense(
+    val id: String,
+    val at: String,
+    val title: String,
+    val amount: Double,
+    val paidBy: String,
+    val shares: Map<String, Double>,
+    val kind: String = "purchase",
+    val mode: String? = null,
+    val basketId: String? = null,
 )
 
 @Serializable
@@ -120,6 +142,10 @@ data class UserState(
     val sync: SyncState = SyncState(),
     val theme: ThemePref = ThemePref.System,
     val plan: MealPlan? = null,
+    /** Quién soy yo en la lista compartida (solo en este dispositivo). */
+    val meId: String? = null,
+    /** Última versión vista en el servidor: la base de la fusión a tres bandas. */
+    val syncBase: ListData? = null,
 )
 
 // ───────────── Planes de cenas ─────────────

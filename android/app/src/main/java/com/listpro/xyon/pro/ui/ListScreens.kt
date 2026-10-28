@@ -38,6 +38,8 @@ import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.Group
+import androidx.compose.material.icons.rounded.ReceiptLong
 import androidx.compose.material.icons.rounded.LinkOff
 import androidx.compose.material.icons.rounded.Nfc
 import androidx.compose.material.icons.rounded.Refresh
@@ -76,6 +78,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.listpro.xyon.pro.data.BasketLine
 import com.listpro.xyon.pro.data.CatalogIndex
+import com.listpro.xyon.pro.data.Member
 import com.listpro.xyon.pro.data.Product
 import com.listpro.xyon.pro.data.SavedBasket
 import com.listpro.xyon.pro.data.SyncState
@@ -114,15 +117,16 @@ fun BasketScreen(
     onProduct: (Product) -> Unit,
     onClear: () -> Unit,
     onDropMissing: () -> Unit,
-    onSave: (String) -> Boolean,
+    onCheckout: () -> Unit,
+    onShare: () -> Unit,
     onReuse: (String) -> Unit,
     onDelete: (String) -> Unit,
     onGoShop: () -> Unit,
 ) {
     val c = LocalColors.current
     val list = state.list
-    val defaultName = remember { "Compra del ${LocalDate.now().format(DateTimeFormatter.ofPattern("d 'de' MMMM", es))}" }
-    var name by rememberSaveable { mutableStateOf(defaultName) }
+    val shared = state.sync.code != null
+    val showWho = shared && list.members.size > 1
     var confirmClear by rememberSaveable { mutableStateOf(false) }
     val missing = if (idx == null) 0 else list.basket.keys.count { it !in idx.products }
     val total = lines.sumOf { it.product.price * it.qty }
@@ -137,14 +141,7 @@ fun BasketScreen(
 
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = Gutter, end = Gutter, bottom = NavClearance)) {
         item {
-            ScreenTitle("Tu cesta") {
-                if (lines.isNotEmpty()) {
-                    if (confirmClear) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        AppButton("No", { confirmClear = false })
-                        AppButton("Vaciar", { onClear(); confirmClear = false }, danger = true)
-                    } else AppButton("Vaciar", { confirmClear = true }, leading = { Icon(Icons.Rounded.Delete, null, Modifier.size(18.dp)) })
-                }
-            }
+            ScreenTitle(if (shared) "Cesta común" else "Tu cesta") { SharePill(shared, list.members, onShare) }
         }
         if (lines.isEmpty() && missing == 0) {
             item {
@@ -196,22 +193,39 @@ fun BasketScreen(
                     }
                 }
                 items(ls, key = { it.product.id }) { l ->
-                    BasketRow(Modifier.animateItem(), l, l.product.id in list.inCart, idx?.subcategories?.get(l.product.subcategory)?.emoji ?: "🛒", onQty, onToggle, onProduct)
+                    val who = if (showWho) WhoLine(
+                        added = list.addedBy[l.product.id]?.let { id -> list.members.find { it.id == id } },
+                        picked = list.pickedBy[l.product.id]?.takeIf { l.product.id in list.inCart }?.let { id -> list.members.find { it.id == id } },
+                        meId = state.meId,
+                    ) else null
+                    BasketRow(Modifier.animateItem(), l, l.product.id in list.inCart, idx?.subcategories?.get(l.product.subcategory)?.emoji ?: "🛒", who, onQty, onToggle, onProduct)
                 }
             }
-            item {
-                Row(Modifier.padding(top = 22.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                    BasicTextField(
-                        value = name,
-                        onValueChange = { if (it.length <= 60) name = it },
-                        singleLine = true,
-                        textStyle = MaterialTheme.typography.bodyLarge.copy(color = c.ink),
-                        cursorBrush = SolidColor(c.ink),
-                        modifier = Modifier.weight(1f).heightIn(min = 52.dp).card(c.surface, c.line, radius = 14.dp).padding(horizontal = 16.dp, vertical = 15.dp),
-                    )
-                    AppButton("Guardar", { if (name.isNotBlank() && onSave(name.trim())) name = defaultName }, primary = true)
+            if (lines.isNotEmpty()) item {
+                AppButton(
+                    if (done in 1 until lines.size) "Terminar compra ($done en el carro)" else "Terminar compra",
+                    onCheckout, Modifier.padding(top = 22.dp).fillMaxWidth().heightIn(min = 56.dp), primary = true,
+                    leading = { Icon(Icons.Rounded.ReceiptLong, null, Modifier.size(20.dp)) },
+                )
+                Text(
+                    if (shared) "Se guarda en el historial y, si queréis, se reparte en las cuentas." else "Se guarda en tu historial de gastos y vacía la cesta.",
+                    style = MaterialTheme.typography.bodySmall, color = c.ink2, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                )
+                Box(Modifier.fillMaxWidth().padding(top = 10.dp), contentAlignment = Alignment.Center) {
+                    if (confirmClear) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        AppButton("No", { confirmClear = false })
+                        AppButton(if (shared) "Vaciar para todos" else "Sí, vaciar", { onClear(); confirmClear = false }, danger = true)
+                    } else Row(
+                        Modifier.heightIn(min = 44.dp).clip(CircleShape).clickable { confirmClear = true }.padding(horizontal = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Icon(Icons.Rounded.Delete, null, tint = c.ink3, modifier = Modifier.size(16.dp))
+                        Text("Vaciar la cesta", style = MaterialTheme.typography.labelLarge, color = c.ink3)
+                    }
                 }
-                Text("Guardar la cesta la vacía y la añade a tus gastos.", style = MaterialTheme.typography.bodySmall, color = c.ink2, modifier = Modifier.padding(top = 8.dp))
+            }
+            if (!shared && lines.isNotEmpty()) item {
+                SharePromo("¿Compráis entre varios?", "Comparte la cesta y repartid los gastos sin hacer cuentas.", onShare, Modifier.padding(top = 22.dp))
             }
         }
 
@@ -249,7 +263,7 @@ private fun Notice(up: Boolean, text: String, onClick: (() -> Unit)? = null) {
 }
 
 @Composable
-private fun BasketRow(modifier: Modifier, l: BasketLine, done: Boolean, emoji: String, onQty: (String, Int) -> Unit, onToggle: (String) -> Unit, onProduct: (Product) -> Unit) {
+private fun BasketRow(modifier: Modifier, l: BasketLine, done: Boolean, emoji: String, who: WhoLine?, onQty: (String, Int) -> Unit, onToggle: (String) -> Unit, onProduct: (Product) -> Unit) {
     val c = LocalColors.current
     val haptics = rememberHaptics()
     val p = l.product
@@ -281,6 +295,18 @@ private fun BasketRow(modifier: Modifier, l: BasketLine, done: Boolean, emoji: S
                 style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold, textDecoration = if (done) TextDecoration.LineThrough else null),
             )
             Text("${p.size} · ${money(p.price)}/ud", color = c.ink2.copy(alpha = alpha), style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (who != null && (who.added != null || who.picked != null)) {
+                Row(Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                    if (who.added != null) {
+                        Avatar(who.added, 18.dp)
+                        Text(if (who.added.id == who.meId) "Lo pediste tú" else "Lo pide ${who.added.name}", style = MaterialTheme.typography.labelSmall, color = c.ink2, maxLines = 1)
+                    }
+                    if (who.picked != null) {
+                        Icon(Icons.Rounded.Check, null, tint = c.greenInk, modifier = Modifier.padding(start = 4.dp).size(14.dp))
+                        Text(if (who.picked.id == who.meId) "Lo cogiste tú" else "Lo cogió ${who.picked.name}", style = MaterialTheme.typography.labelSmall, color = c.greenInk, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+            }
             Row(Modifier.padding(top = 6.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(money(p.price * l.qty), style = MaterialTheme.typography.titleMedium, color = c.ink.copy(alpha = alpha))
                 QtyControl(l.qty, p.name, { onQty(p.id, it) })
@@ -288,6 +314,9 @@ private fun BasketRow(modifier: Modifier, l: BasketLine, done: Boolean, emoji: S
         }
     }
 }
+
+/** Quién pidió y quién cogió un producto de la cesta compartida. */
+class WhoLine(val added: Member?, val picked: Member?, val meId: String?)
 
 @Composable
 private fun SavedRow(b: SavedBasket, idx: CatalogIndex?, onReuse: (String) -> Unit, onDelete: (String) -> Unit) {
@@ -330,10 +359,26 @@ private fun SavedRow(b: SavedBasket, idx: CatalogIndex?, onReuse: (String) -> Un
 // ───────────── Gastos ─────────────
 
 @Composable
-fun StatsScreen(idx: CatalogIndex?, saved: List<SavedBasket>, onGoBasket: () -> Unit) {
+fun StatsScreen(idx: CatalogIndex?, saved: List<SavedBasket>, shared: Boolean, accounts: @Composable () -> Unit, onGoBasket: () -> Unit) {
     val c = LocalColors.current
+    var view by rememberSaveable { mutableStateOf(if (shared) "accounts" else "stats") }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = Gutter, end = Gutter, bottom = NavClearance)) {
-        item { ScreenTitle("Tus gastos") }
+        item { ScreenTitle("Gastos") }
+        item {
+            Row(Modifier.padding(top = 12.dp).fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(c.surface2).padding(4.dp)) {
+                listOf("accounts" to "Cuentas", "stats" to "Estadísticas").forEach { (k, label) ->
+                    Box(
+                        Modifier.weight(1f).height(44.dp).clip(RoundedCornerShape(12.dp)).background(if (view == k) c.surface else Color.Transparent)
+                            .clickable(role = Role.Tab) { view = k },
+                        contentAlignment = Alignment.Center,
+                    ) { Text(label, style = MaterialTheme.typography.labelLarge, color = if (view == k) c.ink else c.ink2) }
+                }
+            }
+        }
+        if (view == "accounts") {
+            item { accounts() }
+            return@LazyColumn
+        }
         if (saved.isEmpty()) {
             item {
                 EmptyState(Icons.Rounded.BarChart, "Aún no hay compras guardadas", "Guarda tu cesta después de comprar y aquí verás cuánto gastas cada mes y en qué.") {
@@ -438,65 +483,23 @@ private fun Figure(value: String, label: String, modifier: Modifier = Modifier) 
 fun SettingsScreen(
     idx: CatalogIndex?,
     sync: SyncState,
+    members: Int,
     theme: ThemePref,
-    nfcAvailable: Boolean,
-    nfcListening: Boolean,
-    onCreateSync: () -> Unit,
-    onJoin: (String) -> Unit,
-    onLeave: () -> Unit,
-    onCopy: (String) -> Unit,
-    onNfcShare: () -> Unit,
-    onNfcReceive: (Boolean) -> Unit,
+    onShare: () -> Unit,
     onTheme: (ThemePref) -> Unit,
     onRefresh: () -> Unit,
     onExport: () -> Unit,
     onImport: () -> Unit,
 ) {
     val c = LocalColors.current
-    var code by rememberSaveable { mutableStateOf("") }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = Gutter, end = Gutter, bottom = NavClearance)) {
         item { ScreenTitle("Ajustes") }
         item {
-            Panel {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("Compartir la lista", style = MaterialTheme.typography.titleLarge, color = c.ink)
-                    if (sync.code != null) {
-                        Text("Este código une tu cesta en la app, en la web y en los móviles de tu casa.", style = MaterialTheme.typography.bodyLarge, color = c.ink2)
-                        Text(
-                            sync.code, textAlign = TextAlign.Center,
-                            style = TextStyle(fontFamily = Numeric, fontWeight = FontWeight.Bold, fontSize = 34.sp, letterSpacing = 6.sp), color = c.greenInk,
-                            modifier = Modifier.fillMaxWidth().card(c.greenSoft, c.greenHi.copy(alpha = 0.4f)).padding(vertical = 14.dp),
-                        )
-                        AppButton("Copiar código", { onCopy(sync.code) }, Modifier.fillMaxWidth(), leading = { Icon(Icons.Rounded.ContentCopy, null, Modifier.size(18.dp)) })
-                        AppButton("Desvincular este dispositivo", onLeave, Modifier.fillMaxWidth(), danger = true, leading = { Icon(Icons.Rounded.LinkOff, null, Modifier.size(18.dp)) })
-                    } else {
-                        Text("Crea un código y escríbelo en otro móvil u ordenador para compartir la misma cesta.", style = MaterialTheme.typography.bodyLarge, color = c.ink2)
-                        AppButton("Crear código", onCreateSync, Modifier.fillMaxWidth(), primary = true, leading = { Icon(Icons.Rounded.Smartphone, null, Modifier.size(18.dp)) })
-                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                            BasicTextField(
-                                value = code,
-                                onValueChange = { v -> code = v.uppercase().filter { it.isLetterOrDigit() }.take(8) },
-                                singleLine = true,
-                                textStyle = MaterialTheme.typography.bodyLarge.copy(color = c.ink, letterSpacing = 2.sp),
-                                cursorBrush = SolidColor(c.ink),
-                                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters),
-                                decorationBox = { inner -> Box { if (code.isEmpty()) Text("Código de 8 caracteres", color = c.ink2, style = MaterialTheme.typography.bodyLarge); inner() } },
-                                modifier = Modifier.weight(1f).heightIn(min = 52.dp).card(c.surface, c.line, radius = 14.dp).padding(horizontal = 16.dp, vertical = 15.dp),
-                            )
-                            AppButton("Unirme", { onJoin(code) }, enabled = code.length == 8)
-                        }
-                    }
-                    if (nfcAvailable) {
-                        Spacer(Modifier.height(4.dp))
-                        Text("Acercando los móviles (NFC)", style = MaterialTheme.typography.titleMedium, color = c.ink)
-                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            AppButton("Enviar", onNfcShare, Modifier.weight(1f), leading = { Icon(Icons.Rounded.Nfc, null, Modifier.size(18.dp)) })
-                            AppButton(if (nfcListening) "Esperando…" else "Recibir", { onNfcReceive(!nfcListening) }, Modifier.weight(1f), primary = nfcListening, leading = { Icon(Icons.Rounded.Nfc, null, Modifier.size(18.dp)) })
-                        }
-                        if (nfcListening) Text("Acerca la parte trasera de este móvil al que tiene la lista y pulsa Enviar en él.", style = MaterialTheme.typography.bodyMedium, color = c.ink2)
-                    }
-                }
-            }
+            SharePromo(
+                if (sync.code != null) "Lista compartida con $members ${if (members == 1) "persona" else "personas"}" else "Compartir la cesta",
+                if (sync.code != null) "Código ${sync.code} · invita o gestiona quién está" else "Comprad entre varios y repartid los gastos",
+                onShare, Modifier.padding(top = 16.dp),
+            )
         }
         item {
             Panel {

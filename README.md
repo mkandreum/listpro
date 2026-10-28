@@ -91,3 +91,11 @@ jadx -d 03_jadx com.listpro.xyon.pro-2.apk
 ListPro es un producto desarrollado y mantenido por **Xyon Platforms**, empresa especializada en soluciones digitales para negocios locales y pymes.
 
 > © Xyon Platforms — Todos los derechos reservados
+
+## Lista compartida y cuentas
+
+- La cesta se comparte desde el botón **Compartir** de la propia cesta: se crea un código de 8 caracteres y se invita con un enlace (`/#/unirse/CODIGO`) o, en Android, acercando los móviles por NFC.
+- Cada persona se apunta con su nombre. La cesta muestra quién pidió cada producto y quién lo ha cogido.
+- Si dos personas tocan la lista a la vez, la sincronización junta los cambios con una fusión a tres bandas (cada cliente guarda la última versión vista en el servidor), así no se pisan.
+- **Terminar compra** guarda lo que está en el carro (lo demás se queda en la cesta) y, si se quiere, lo reparte: a partes iguales, por producto (cada uno lo que pidió) o sin repartir.
+- La pestaña **Gastos → Cuentas** muestra el saldo de cada uno, los pagos mínimos para quedar en paz y el historial. ListPro no mueve dinero: «Saldar» solo apunta el pago.

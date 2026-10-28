@@ -1,11 +1,27 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { BarChart3 } from 'lucide-react';
+import { Accounts } from './Accounts';
 import { money } from '../lib';
 import { href } from '../router';
 import { useStore } from '../store';
 import { Empty } from '../components/Chrome';
 
 export function Stats() {
+  const shared = useStore((s) => s.sync.code != null);
+  const [view, setView] = useState<'accounts' | 'stats'>(shared ? 'accounts' : 'stats');
+  return (
+    <>
+      <h1 className="h-section" style={{ marginTop: 6 }}>Gastos</h1>
+      <div className="segmented two-seg" role="group" aria-label="Qué ver">
+        <button aria-pressed={view === 'accounts'} onClick={() => setView('accounts')}>Cuentas</button>
+        <button aria-pressed={view === 'stats'} onClick={() => setView('stats')}>Estadísticas</button>
+      </div>
+      <div key={view} className="screen">{view === 'accounts' ? <Accounts /> : <Spending />}</div>
+    </>
+  );
+}
+
+function Spending() {
   const saved = useStore((s) => s.savedBaskets);
   const idx = useStore((s) => s.idx);
 
@@ -41,7 +57,6 @@ export function Stats() {
   if (!saved.length) {
     return (
       <>
-        <h1 className="h-section" style={{ marginTop: 6 }}>Tus gastos</h1>
         <Empty icon={<BarChart3 size={34} strokeWidth={2.5} />} title="Aún no hay compras guardadas">
           <p className="muted">Guarda tu cesta después de comprar y aquí verás cuánto gastas cada mes y en qué.</p>
           <a className="btn primary" href={href({ name: 'basket' })} style={{ textDecoration: 'none', marginTop: 8 }}>Ir a la cesta</a>
@@ -55,7 +70,6 @@ export function Stats() {
 
   return (
     <>
-      <h1 className="h-section" style={{ marginTop: 6 }}>Tus gastos</h1>
       <section className="panel">
         <div className="figures">
           <div className="figure"><b>{money(data.thisMonth)}</b><span>este mes</span></div>

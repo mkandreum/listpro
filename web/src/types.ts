@@ -79,6 +79,33 @@ export interface ListData {
   /** Plan de cenas activo y preferencias: así el plan también se ve en los otros dispositivos. */
   planId?: string | null;
   planPrefs?: PlanPrefs | null;
+  /** Lista compartida: quién está, quién pidió y quién cogió cada producto, y las cuentas. */
+  members?: Member[];
+  addedBy?: Record<string, string>;
+  pickedBy?: Record<string, string>;
+  expenses?: Expense[];
+}
+
+export interface Member {
+  id: string;
+  name: string;
+  hue: string;
+  joinedAt: string;
+}
+
+export type SplitMode = 'equal' | 'items';
+
+/** Un gasto o un pago entre miembros. `shares` dice cuánto le toca a cada uno (en euros); siempre suma `amount`. */
+export interface Expense {
+  id: string;
+  at: string;
+  title: string;
+  amount: number;
+  paidBy: string;
+  shares: Record<string, number>;
+  kind: 'purchase' | 'settle';
+  mode?: SplitMode;
+  basketId?: string;
 }
 
 export interface PriceHistory {

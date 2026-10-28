@@ -6,7 +6,7 @@ export type Route =
   | { name: 'deals'; kind: 'down' | 'new' }
   | { name: 'category'; id: number; sub?: number }
   | { name: 'plan'; recipe?: number }
-  | { name: 'basket' }
+  | { name: 'basket'; join?: string }
   | { name: 'stats' }
   | { name: 'settings' };
 
@@ -21,6 +21,8 @@ export function parse(hash: string): Route {
     case 'c': return { name: 'category', id: Number(parts[1]), sub: parts[2] ? Number(parts[2]) : undefined };
     case 'plan': return { name: 'plan', recipe: parts[1] ? Number(parts[1]) : undefined };
     case 'cesta': return { name: 'basket' };
+    case 'unirse': return { name: 'basket', join: (parts[1] ?? '').toUpperCase() };
+    case 'compartir': return { name: 'basket', join: '' };
     case 'gastos': return { name: 'stats' };
     case 'ajustes': return { name: 'settings' };
     default: return { name: 'home' };
@@ -34,7 +36,7 @@ export function href(r: Route): string {
     case 'deals': return r.kind === 'down' ? '#/bajadas' : '#/novedades';
     case 'category': return `#/c/${r.id}${r.sub ? `/${r.sub}` : ''}`;
     case 'plan': return `#/plan${r.recipe != null ? `/${r.recipe}` : ''}`;
-    case 'basket': return '#/cesta';
+    case 'basket': return r.join ? `#/unirse/${r.join}` : r.join === '' ? '#/compartir' : '#/cesta';
     case 'stats': return '#/gastos';
     case 'settings': return '#/ajustes';
   }

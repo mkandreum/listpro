@@ -37,7 +37,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -49,7 +52,10 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.listpro.xyon.pro.nfc.NfcProtocol
 import com.listpro.xyon.pro.ui.AppViewModel
+import com.listpro.xyon.pro.ui.AccountsContent
 import com.listpro.xyon.pro.ui.BasketScreen
+import com.listpro.xyon.pro.ui.CheckoutSheet
+import com.listpro.xyon.pro.ui.ShareSheet
 import com.listpro.xyon.pro.ui.CategoryScreen
 import com.listpro.xyon.pro.ui.GlassPillNav
 import com.listpro.xyon.pro.ui.HomeScreen
@@ -125,6 +131,8 @@ private fun App(vm: AppViewModel, nfcAvailable: Boolean) {
     val sheet by vm.sheet.collectAsStateWithLifecycle()
     val messages by vm.messages.collectAsStateWithLifecycle()
     val nfcListening by vm.nfcListening.collectAsStateWithLifecycle()
+    val shareOpen by vm.shareOpen.collectAsStateWithLifecycle()
+    var checkout by rememberSaveable { mutableStateOf(false) }
     val snackbar = remember { SnackbarHostState() }
     val activity = androidx.compose.ui.platform.LocalContext.current as MainActivity
     val route = vm.current
@@ -140,7 +148,7 @@ private fun App(vm: AppViewModel, nfcAvailable: Boolean) {
     // Al volver a la app: precios nuevos y cambios de otros dispositivos; mientras está abierta, sondeo de la lista compartida.
     LifecycleResumeEffect(Unit) {
         vm.refresh()
-        val job = activity.lifecycleScope.launch { while (true) { delay(20_000); vm.pullSync() } }
+        val job = activity.lifecycleScope.launch { while (true) { delay(10_000); vm.pullSync() } }
         onPauseOrDispose { job.cancel() }
     }
 
@@ -193,20 +201,16 @@ private fun App(vm: AppViewModel, nfcAvailable: Boolean) {
                     idx, state, vm.repo.basketLines(state.list, idx), onQty, vm.repo::toggleInCart, onProduct,
                     onClear = { vm.repo.clearBasket(); vm.repo.toast("Cesta vaciada") },
                     onDropMissing = vm.repo::dropMissing,
-                    onSave = { name -> vm.repo.saveBasket(name).also { if (it) vm.repo.toast("Guardada: $name") } },
+                    onCheckout = { checkout = true },
+                    onShare = { vm.showShare(true) },
                     onReuse = { id -> vm.repo.toast("${vm.repo.reuseBasket(id)} productos añadidos a la cesta") },
                     onDelete = { id -> vm.repo.deleteBasket(id); vm.repo.toast("Cesta borrada") },
                     onGoShop = { vm.selectTab(Tab.Products) },
                 )
-                Route.Stats -> StatsScreen(idx, state.list.savedBaskets) { vm.selectTab(Tab.Basket) }
+                Route.Stats -> StatsScreen(idx, state.list.savedBaskets, state.sync.code != null, { AccountsContent(vm, state) }) { vm.selectTab(Tab.Basket) }
                 Route.Settings -> SettingsScreen(
-                    idx, state.sync, state.theme, nfcAvailable, nfcListening,
-                    onCreateSync = { vm.runAction("Código creado") { vm.repo.createSync() } },
-                    onJoin = { code -> vm.runAction("Dispositivo vinculado") { vm.repo.joinSync(code) } },
-                    onLeave = { vm.repo.leaveSync(); vm.repo.toast("Dispositivo desvinculado") },
-                    onCopy = { activity.copy(it); vm.repo.toast("Código copiado") },
-                    onNfcShare = vm::prepareNfcShare,
-                    onNfcReceive = vm::setNfcListening,
+                    idx, state.sync, state.list.members.size, state.theme,
+                    onShare = { vm.showShare(true) },
                     onTheme = vm.repo::setTheme,
                     onRefresh = { vm.refresh(); vm.repo.toast("Comprobando precios…") },
                     onExport = { exporter.launch("listpro_backup.json") },
@@ -214,6 +218,9 @@ private fun App(vm: AppViewModel, nfcAvailable: Boolean) {
                 )
             }
         }
+
+        if (shareOpen) ShareSheet(vm, state, nfcAvailable, nfcListening) { vm.showShare(false); vm.setNfcListening(false) }
+        if (checkout) CheckoutSheet(vm, state) { checkout = false }
 
         // Velo bajo la barra de estado: el contenido pasa por debajo sin mezclarse con la hora y los iconos
         Box(Modifier.fillMaxWidth().windowInsetsTopHeight(WindowInsets.statusBars).background(c.ground.copy(alpha = 0.92f)))

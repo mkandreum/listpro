@@ -15,7 +15,7 @@ import { Settings } from './screens/Settings';
 import { PlanScreen } from './screens/Plan';
 
 const CATALOG_POLL_MS = 10 * 60_000;
-const SYNC_POLL_MS = 20_000;
+const SYNC_POLL_MS = 10_000;
 
 function useTheme() {
   const pref = useStore((s) => s.theme);
@@ -70,7 +70,7 @@ export function App() {
       case 'deals': screen = <Results key={route.kind} mode={route.kind} onOpen={onOpen} />; break;
       case 'category': screen = <CategoryScreen key={route.id} id={route.id} sub={route.sub} onOpen={onOpen} />; break;
       case 'plan': screen = <PlanScreen recipe={route.recipe} />; break;
-      case 'basket': screen = <Basket onOpen={onOpen} />; break;
+      case 'basket': screen = <Basket onOpen={onOpen} join={route.join} />; break;
       case 'stats': screen = <Stats />; break;
       case 'settings': screen = <Settings />; break;
     }

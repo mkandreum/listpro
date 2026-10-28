@@ -23,8 +23,8 @@ android {
         minSdk = 27
         targetSdk = 35
         // La 1.0 (WebView + CSV) era versionCode 2
-        versionCode = 10
-        versionName = "2.0"
+        versionCode = 11
+        versionName = "2.1"
         // Servidor de ListPro. Para probar contra uno local: -PapiBase=http://10.0.2.2:3000 (solo debug permite http)
         val base = (project.findProperty("apiBase") as String?) ?: "https://listpro.xyoncloud.win"
         buildConfigField("String", "API_BASE", "\"$base\"")
