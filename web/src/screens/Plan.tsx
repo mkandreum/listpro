@@ -13,6 +13,7 @@ import { haptic } from '../fx/haptics';
 import { useTweened } from '../fx/motion';
 import { Pager, type PillItem } from '../components/Pills';
 import { Price } from '../components/ProductTag';
+import { useSheet } from '../fx/sheet';
 
 export const DEFAULT_PREFS: PlanPrefs = {
   budget: 45, people: 2, days: 5, meals: ['cena'], maxMinutes: 40, diets: ['omnivora'], appliances: ['fuego', 'microondas'],
@@ -396,13 +397,7 @@ function ShoppingPage({ plan, shopping }: { plan: MealPlan; shopping: MealPlan['
 function RecipeSheet({ r, index, onClose }: { r: PlanRecipe; index: number; onClose: () => void }) {
   const [done, setDone] = useState<Set<number>>(new Set());
   const [swapping, setSwapping] = useState(false);
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
-    addEventListener('keydown', onKey);
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => { removeEventListener('keydown', onKey); document.body.style.overflow = prev; };
-  }, [onClose]);
+  const { ref, close } = useSheet(onClose);
   const n = r.nutrition;
   const M = MEALS[mealOf(r)];
   const bought = r.ingredients.filter((i) => i.productId).map((i) => ({ productId: i.productId!, packs: Math.max(1, Math.ceil(i.fraction - 0.05)) }));
@@ -423,8 +418,8 @@ function RecipeSheet({ r, index, onClose }: { r: PlanRecipe; index: number; onCl
 
   return (
     <>
-      <div className="sheet-scrim" onClick={onClose} />
-      <div className="sheet recipe" role="dialog" aria-modal="true" aria-labelledby="recipe-title" style={{ '--meal': M.hue } as React.CSSProperties}>
+      <div className="sheet-scrim" onClick={close} />
+      <div ref={ref} className="sheet recipe" role="dialog" aria-modal="true" aria-labelledby="recipe-title" style={{ '--meal': M.hue } as React.CSSProperties}>
         <div className="grip" />
         <span className="stamp meal-stamp"><M.icon size={14} /> {M.label} · {r.day} · {r.servings} {r.servings === 1 ? 'ración' : 'raciones'}</span>
         <h2 id="recipe-title" className={swapping ? 'swapping' : undefined}>{r.name}</h2>
@@ -479,7 +474,7 @@ function RecipeSheet({ r, index, onClose }: { r: PlanRecipe; index: number; onCl
         }}><ShoppingBasket size={18} /> Añadir ingredientes a la cesta</button>
         <div className="two" style={{ marginTop: 10 }}>
           <button className="btn" onClick={swap} disabled={swapping}><RefreshCw size={18} className={swapping ? 'spin' : undefined} /> {swapping ? 'Buscando otra…' : 'Cambiar receta'}</button>
-          <button className="btn" onClick={onClose}>Cerrar</button>
+          <button className="btn" onClick={close}>Cerrar</button>
         </div>
       </div>
     </>

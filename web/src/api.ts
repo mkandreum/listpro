@@ -1,4 +1,4 @@
-import type { BasketCost, Catalog, Cheaper, Comparison, ListData, MealPlan, PlanPrefs, PlannerOptions, PriceHistory, Session, StoreInfo, User } from './types';
+import type { Alternatives, BasketCost, Catalog, Cheaper, Comparison, ListData, MealPlan, PlanPrefs, PlannerOptions, PriceHistory, Session, StoreInfo, User } from './types';
 
 const BASE = import.meta.env.VITE_API_BASE ?? '';
 
@@ -38,6 +38,7 @@ export const api = {
   stores: () => fetch(`${BASE}/api/stores`, { cache: 'no-cache' }).then((r) => json<StoreInfo[]>(r)),
   compare: (id: string) => fetch(`${BASE}/api/products/${encodeURIComponent(id)}/compare`).then((r) => json<Comparison>(r)),
   cheaper: (ids: string[]) => send('POST', '/api/compare', { ids }).then((r) => json<Cheaper>(r)),
+  alternatives: (items: { id: string; qty: number }[]) => send('POST', '/api/basket/alternatives', { items }).then((r) => json<Alternatives>(r)),
   basketCost: (items: { id: string; qty: number }[]) => send('POST', '/api/basket/compare', { items }).then((r) => json<BasketCost>(r)),
   history: (id: string) => fetch(`${BASE}/api/products/${encodeURIComponent(id)}/history`).then((r) => json<PriceHistory>(r)),
   plannerOptions: () => fetch(`${BASE}/api/planner/options`).then((r) => json<PlannerOptions>(r)),

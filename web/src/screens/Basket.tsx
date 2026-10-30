@@ -1,15 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowRightLeft, Check, ChevronRight, PiggyBank, ReceiptText, RotateCcw, ShoppingBasket, Trash2, TrendingDown, TrendingUp } from 'lucide-react';
-import { api } from '../api';
+import { Check, ChevronRight, ReceiptText, RotateCcw, ShoppingBasket, Trash2, TrendingDown, TrendingUp } from 'lucide-react';
 import { money, units } from '../lib';
 import { href, navigate } from '../router';
 import {
-  basketLines, checkoutLines, clearBasket, deleteBasket, dropMissing, finishShop, isShared, missingIds, moveToStore, purchaseShares, reuseBasket, storeInfo, storeOf,
+  basketLines, checkoutLines, clearBasket, deleteBasket, dropMissing, finishShop, isShared, missingIds, purchaseShares, reuseBasket, storeInfo, storeOf,
   toast, toggleInCart, useStore,
 } from '../store';
-import type { BasketCost, Cheaper, Product, SplitMode } from '../types';
+import type { Product, SplitMode } from '../types';
 import { PillBar } from '../components/Pills';
-import { StoreDot, StoreName, Thumb } from '../components/Stores';
+import { StoreName } from '../components/Stores';
+import { AlternativesSheet, bestSaving, CompareCard, SavingChip, SavingsSheet, useBasketCompare } from '../components/Compare';
 import { Price, ProductImage, QtyControl } from '../components/ProductTag';
 import { Empty } from '../components/Chrome';
 import { Avatar, SharePill, ShareSheet, Sheet } from '../components/Share';
@@ -59,36 +59,14 @@ export function Basket({ onOpen, join }: { onOpen: (p: Product) => void; join?: 
   const missing = missingIds().filter((id) => storeOf(id) === tab);
   const loadingStore = Object.keys(basket).some((id) => storeOf(id) === tab) && !catalogs[tab];
 
-  // Lo que sale más barato en otro súper (se pide al servidor cuando cambia la cesta)
-  const [cheaper, setCheaper] = useState<Cheaper>({});
-  const [showCheaper, setShowCheaper] = useState(false);
-  const ids = lines.map((l) => l.p.id).join(',');
-  useEffect(() => {
-    if (!ids) { setCheaper({}); return; }
-    let alive = true;
-    const t = setTimeout(() => api.cheaper(ids.split(',')).then((c) => alive && setCheaper(c)).catch(() => {}), 400);
-    return () => { alive = false; clearTimeout(t); };
-  }, [ids]);
-  const savings = lines.filter((l) => cheaper[l.p.id]).map((l) => ({ l, c: cheaper[l.p.id] }));
-  const totalSaving = savings.reduce((a, x) => a + x.c.saving * x.l.qty, 0);
+  // Equivalentes de cada producto en los otros súper y coste de la cesta en cada uno
+  const { alts, cost: basketCost } = useBasketCompare(lines);
+  const savings = lines.flatMap((l) => { const o = bestSaving(alts[l.p.id]); return o ? [{ line: l, o }] : []; });
+  const [altLine, setAltLine] = useState<{ p: Product; qty: number } | null>(null);
+  const [showSavings, setShowSavings] = useState(false);
   const total = lines.reduce((a, l) => a + l.p.price * l.qty, 0);
   const shownTotal = useTweened(total);
   const doneCount = lines.filter((l) => inCart.includes(l.p.id)).length;
-
-  // Coste aproximado de la misma cesta en los demás súper
-  const [basketCost, setBasketCost] = useState<BasketCost | null>(null);
-  const basketKey = lines.map((l) => `${l.p.id}:${l.qty}`).join(',');
-  const otherCosts = (basketCost?.stores ?? []).filter((s) => s.id !== tab && s.matched > 0);
-  useEffect(() => {
-    if (!basketKey) { setBasketCost(null); return; }
-    let alive = true;
-    const t = setTimeout(() => {
-      api.basketCost(lines.map((l) => ({ id: l.p.id, qty: l.qty })))
-        .then((c) => { if (alive) setBasketCost(c); })
-        .catch(() => {});
-    }, 500);
-    return () => { alive = false; clearTimeout(t); };
-  }, [basketKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   let changed = 0, delta = 0;
   for (const l of lines) {
@@ -115,7 +93,7 @@ export function Basket({ onOpen, join }: { onOpen: (p: Product) => void; join?: 
 
       {multi && (
         <>
-          <PillBar label="Cestas por súper" active={stores.indexOf(tab)} onSelect={(i) => { haptic.tap(); setPicked(stores[i]); setShowCheaper(false); }}
+          <PillBar label="Cestas por súper" active={stores.indexOf(tab)} onSelect={(i) => { haptic.tap(); setPicked(stores[i]); }}
             items={stores.map((s) => ({ key: s, label: storeInfo(s).name, hue: storeInfo(s).hue, sub: money(subtotal(s)) }))} />
           <p className="muted small" style={{ margin: '-6px 4px 12px' }}>
             Tienes cesta en {stores.length} súper: en total {money(stores.reduce((a, s) => a + subtotal(s), 0))}. Termina la compra de cada uno por separado.
@@ -152,80 +130,7 @@ export function Basket({ onOpen, join }: { onOpen: (p: Product) => void; join?: 
               <span className="num">{changed} producto{changed > 1 ? 's han' : ' ha'} cambiado de precio desde que lo{changed > 1 ? 's' : ''} añadiste ({delta > 0 ? '+' : ''}{money(delta)}).</span>
             </div>
           )}
-          {savings.length > 0 && (
-            <div className="notice down cheaper-notice">
-              <PiggyBank size={20} />
-              <span className="num">
-                {savings.length} producto{savings.length > 1 ? 's' : ''} te sale{savings.length > 1 ? 'n' : ''} más barato{savings.length > 1 ? 's' : ''} en otro súper: ahorras unos {money(totalSaving)}.{' '}
-                <button onClick={() => { haptic.tap(); setShowCheaper((v) => !v); }}>{showCheaper ? 'Ocultar' : 'Ver cuáles'}</button>
-              </span>
-            </div>
-          )}
-          {showCheaper && savings.length > 0 && (
-            <div className="panel cheaper-list" style={{ marginTop: 10 }}>
-              {savings.map(({ l, c }) => (
-                <div key={l.p.id} className="cmp-row">
-                  <Thumb src={c.product.image} />
-                  <div className="info">
-                    <span className="cmp-store"><StoreName id={c.store} /><span className={`cmp-kind ${c.match}`}>{c.match === 'same' ? 'Mismo producto' : 'Parecido'}</span></span>
-                    <b>{c.product.name}</b>
-                    <span className="muted small num">en vez de {l.p.name} · {money(l.p.price)}</span>
-                  </div>
-                  <div className="right num">
-                    <b className="cheaper">{money(c.product.price)}</b>
-                    <span className="saving">−{money(c.saving * l.qty)}</span>
-                    <button className="btn small-btn" onClick={() => {
-                      haptic.success();
-                      moveToStore(l.p.id, c.product.id, c.product.price);
-                      toast(`Pasado a tu cesta de ${storeInfo(c.store).name}`);
-                    }}><ArrowRightLeft size={15} /> Mover</button>
-                  </div>
-                </div>
-              ))}
-              {savings.length > 1 && (
-                <button className="btn primary block" style={{ marginTop: 12 }} onClick={() => {
-                  haptic.success();
-                  for (const { l, c } of savings) moveToStore(l.p.id, c.product.id, c.product.price);
-                  toast(`${savings.length} productos movidos`);
-                  setShowCheaper(false);
-                }}><ArrowRightLeft size={18} /> Moverlos todos</button>
-              )}
-              <p className="muted small" style={{ marginTop: 8 }}>«Parecido» compara por precio por kilo o litro. Al mover, la cantidad se mantiene.</p>
-            </div>
-          )}
-          {basketCost && otherCosts.length > 0 && (
-            <section className="panel basket-cost" aria-label="Coste aproximado en otros súper">
-              <div className="basket-cost-head">
-                <h2>Coste en otros súper</h2>
-                <span className="muted small">Aproximado</span>
-              </div>
-              {otherCosts.map((s) => {
-                const diff = s.total - total;
-                return (
-                  <div className="basket-cost-row" key={s.id}>
-                    <StoreDot id={s.id} size={26} />
-                    <div className="info">
-                      <b>{s.name}</b>
-                      <span className="muted small num">{s.matched} de {basketCost.totalItems} productos · {s.coverage}%</span>
-                      <span className="muted small">
-                        {s.similar > 0 ? `${s.similar} parecido${s.similar > 1 ? 's' : ''}` : 'Mismos productos'}
-                        {s.missingCount > 0 ? ` · faltan ${s.missingCount}` : ''}
-                      </span>
-                    </div>
-                    <div className="right num">
-                      <b>{money(s.total)}</b>
-                      <span className={diff <= 0 ? 'saving' : 'muted small'}>
-                        {diff <= 0 ? '−' : '+'}{money(Math.abs(diff))}
-                      </span>
-                    </div>
-                  </div>
-                );
-              })}
-              <p className="muted small" style={{ marginTop: 8 }}>
-                Mismos productos o equivalentes. No incluye ofertas ni cambios de formato.
-              </p>
-            </section>
-          )}
+          <CompareCard store={tab} total={total} cost={basketCost} savings={savings} onSavings={() => setShowSavings(true)} />
           {missing.length > 0 && (
             <div className="notice up">
               <span>{missing.length} producto{missing.length > 1 ? 's ya no están' : ' ya no está'} a la venta. <button onClick={dropMissing}>Quitar</button></span>
@@ -262,6 +167,7 @@ export function Basket({ onOpen, join }: { onOpen: (p: Product) => void; join?: 
                           <div className="p num">{money(p.price * qty)}</div>
                           <QtyControl id={p.id} name={p.name} />
                         </div>
+                        <SavingChip a={alts[p.id]} onOpen={() => setAltLine({ p, qty })} />
                       </div>
                     </div>
                   );
@@ -296,6 +202,8 @@ export function Basket({ onOpen, join }: { onOpen: (p: Product) => void; join?: 
       )}
 
       {sharing && <ShareSheet onClose={closeShare} joinCode={join || undefined} />}
+      {altLine && <AlternativesSheet line={{ p: altLine.p, qty: basket[altLine.p.id] ?? altLine.qty }} a={alts[altLine.p.id]} onClose={() => setAltLine(null)} />}
+      {showSavings && <SavingsSheet savings={savings} onOpenLine={(l) => { setShowSavings(false); setAltLine(l); }} onClose={() => setShowSavings(false)} />}
       {checkout && <CheckoutSheet store={multi ? tab : undefined} onClose={() => setCheckout(false)} />}
 
       <div className="row-head" style={{ marginTop: 40 }}>

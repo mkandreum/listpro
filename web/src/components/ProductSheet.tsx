@@ -6,6 +6,7 @@ import { storeInfo, storeOf, useStore } from '../store';
 import { CompareBlock, StoreName } from './Stores';
 import type { PriceHistory, Product } from '../types';
 import { Price, ProductImage, QtyControl, Seal } from './ProductTag';
+import { useSheet } from '../fx/sheet';
 
 function HistoryChart({ history }: { history: PriceHistory['history'] }) {
   if (history.length < 2) return <p className="muted small" style={{ marginTop: 10 }}>Sin cambios de precio desde que lo seguimos ({new Date(history[0]?.at ?? Date.now()).toLocaleDateString('es-ES')}).</p>;
@@ -42,23 +43,17 @@ export function ProductSheet({ p, onClose }: { p: Product; onClose: () => void }
     return () => { alive = false; };
   }, [p.id]);
 
-  useEffect(() => {
-    closeRef.current?.focus();
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
-    addEventListener('keydown', onKey);
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => { removeEventListener('keydown', onKey); document.body.style.overflow = prev; };
-  }, [onClose]);
+  const { ref, close } = useSheet(onClose);
+  useEffect(() => { closeRef.current?.focus({ preventScroll: true }); }, []);
 
   return (
     <>
-      <div className="sheet-scrim" onClick={onClose} />
-      <div className="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title">
+      <div className="sheet-scrim" onClick={close} />
+      <div ref={ref} className="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title">
         <div className="grip" />
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
           <span className="sheet-tags"><StoreName id={store} />{sub && <span className="stamp">{sub.name}</span>}</span>
-          <button ref={closeRef} className="icon-btn" onClick={onClose} aria-label="Cerrar"><X /></button>
+          <button ref={closeRef} className="icon-btn" onClick={close} aria-label="Cerrar"><X /></button>
         </div>
         <div className="media" style={{ position: 'relative' }}>
           <Seal p={p} />

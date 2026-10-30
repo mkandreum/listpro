@@ -64,7 +64,7 @@ export function App() {
     const onVisible = () => { if (document.visibilityState === 'visible') { checkCatalogUpdate(); pullSync(); } };
     document.addEventListener('visibilitychange', onVisible);
     // Un toque suave en todo lo que se pulsa y no tiene ya su propia háptica
-    const onTap = (e: Event) => { if ((e.target as Element).closest?.('.chip, .stat, .cat-tile, .segmented button, .back, .btn:not(.primary)')) haptic.tick(); };
+    const onTap = (e: Event) => { if ((e.target as Element).closest?.('.chip, .stat, .cat-tile, .segmented button, .back, .btn:not(.primary), summary, [role="tab"], .link-btn, .store-btn, .icon-btn, .banner')) haptic.tick(); };
     document.addEventListener('click', onTap, { capture: true });
     return () => { clearInterval(a); clearInterval(b); document.removeEventListener('visibilitychange', onVisible); document.removeEventListener('click', onTap, { capture: true }); };
   }, []);

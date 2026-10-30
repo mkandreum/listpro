@@ -6,6 +6,7 @@ import { changeQty, moveToStore, setStore, storeInfo, toast, useStore } from '..
 import type { Comparison, Product, StoreMatch } from '../types';
 import { haptic } from '../fx/haptics';
 import { Sheet } from './Share';
+import { MATCH_LABEL } from './Compare';
 
 /** Foto de producto pequeña; si no carga (algunas tiendas cambian las URL), un hueco en vez del icono roto. */
 export function Thumb({ src }: { src: string | null }) {
@@ -114,21 +115,22 @@ export function CompareBlock({ p }: { p: Product }) {
   const cheapest = Math.min(p.price, bestSame?.product.price ?? Infinity);
 
   const row = (m: StoreMatch, x = m.product, alt = false) => {
-    const unitHere = p.refFormat === x.refFormat && p.refPrice && x.refPrice;
-    const cheaper = m.match === 'same' ? x.price < p.price - 0.004 : unitHere ? x.refPrice! < p.refPrice! - 0.004 : false;
+    // Mismo producto: por precio. Equivalente o parecido: por kilo/litro calculado igual en todos los súper
+    const mine = data.per, theirs = x.per;
+    const cheaper = m.match === 'same' ? x.price < p.price - 0.004 : mine && theirs && mine.label === theirs.label ? theirs.value < mine.value - 0.004 : false;
     const inBasket = basket[x.id] ?? 0;
     return (
       <div key={x.id} className={`cmp-row ${alt ? 'alt' : ''}`}>
         <Thumb src={x.image} />
         <div className="info">
-          <span className="cmp-store"><StoreName id={m.store} />{!alt && <span className={`cmp-kind ${m.match}`}>{m.match === 'same' ? 'Mismo producto' : 'Parecido'}</span>}</span>
+          <span className="cmp-store"><StoreName id={m.store} />{!alt && <span className={`cmp-kind ${x.match ?? m.match}`}>{MATCH_LABEL[x.match ?? m.match]}</span>}</span>
           <b>{x.name}</b>
-          <span className="muted small num">{[x.size, perUnit(x.refPrice, x.refFormat)].filter(Boolean).join(' · ')}</span>
+          <span className="muted small num">{[x.size, x.per ? `${money(x.per.value)}/${x.per.label}` : perUnit(x.refPrice, x.refFormat)].filter(Boolean).join(' · ')}</span>
         </div>
         <div className="right num">
           <b className={cheaper ? 'cheaper' : undefined}>{money(x.price)}</b>
           {cheaper && m.match === 'same' && <span className="saving">−{money(p.price - x.price)}</span>}
-          {cheaper && m.match === 'similar' && <span className="saving">más barato/{x.refFormat}</span>}
+          {cheaper && m.match !== 'same' && <span className="saving">más barato/{x.per?.label}</span>}
           <button className={`cmp-add ${inBasket ? 'on' : ''}`} onClick={() => {
             haptic.add();
             changeQty(x.id, 1);
@@ -162,7 +164,7 @@ export function CompareBlock({ p }: { p: Product }) {
       )}
       <p className="muted small" style={{ marginTop: 8 }}>
         {cheapest < p.price - 0.004 ? 'Hay un súper donde te sale más barato. ' : data.matches.some((m) => m.match === 'same') ? 'Aquí ya está al mejor precio. ' : ''}
-        «Parecido» compara por precio por kilo o litro: revisa la etiqueta si te importa la marca.
+        «Equivalente» es el mismo producto de otra marca; «Parecido», del mismo tipo con alguna diferencia. Se comparan por kilo o litro.
       </p>
     </div>
   );

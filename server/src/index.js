@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { db, getMeta, setMeta } from './db.js';
 import { getCatalog, getPriceHistory } from './catalog.js';
 import { isScraping, scheduleScraping, scrapeAll, scrapeCatalog } from './scraper.js';
-import { basketCost, cheaperElsewhere, compareProduct } from './compare.js';
+import { basketAlternatives, basketCost, cheaperElsewhere, compareProduct } from './compare.js';
 import { isStore, metaKey, storeParam, STORES } from './stores.js';
 import { createPlan, getPlan, plannerOptions, PlannerError, swapRecipe } from './planner.js';
 import {
@@ -88,6 +88,16 @@ app.post('/api/compare', (req, res) => {
   const ids = Array.isArray(req.body?.ids) ? req.body.ids.filter((x) => typeof x === 'string').slice(0, 300) : [];
   res.json(cheaperElsewhere(ids));
 });
+
+const basketItems = (body) => (Array.isArray(body?.items)
+  ? body.items
+    .filter((x) => x && typeof x.id === 'string' && Number.isFinite(Number(x.qty)) && Number(x.qty) > 0)
+    .slice(0, 300)
+    .map((x) => ({ id: x.id, qty: Number(x.qty) }))
+  : []);
+
+// Para cada producto de la cesta: sus equivalentes en los otros súper, con lo que costarían para la misma cantidad
+app.post('/api/basket/alternatives', (req, res) => res.json(basketAlternatives(basketItems(req.body))));
 
 // Coste aproximado de la cesta en cada súper, con la cobertura de productos emparejados.
 app.post('/api/basket/compare', (req, res) => {

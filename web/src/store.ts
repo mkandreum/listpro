@@ -253,12 +253,12 @@ export function changeQty(id: string, delta: number) {
   if (next > 0 && !state.catalogs[storeOf(id)]) loadCatalog(storeOf(id)).catch(() => {});
 }
 
-/** Cambia un producto de la cesta por su equivalente en otro súper, con la misma cantidad. */
-export function moveToStore(fromId: string, toId: string, price?: number) {
+/** Cambia un producto de la cesta por su equivalente en otro súper (con los envases que hagan falta para la misma cantidad). */
+export function moveToStore(fromId: string, toId: string, price?: number, packs?: number) {
   const qty = state.basket[fromId];
   if (!qty || fromId === toId) return;
   const basket = without(state.basket, [fromId]);
-  basket[toId] = (basket[toId] ?? 0) + qty;
+  basket[toId] = (basket[toId] ?? 0) + (packs ?? qty);
   const addedPrices = without(state.addedPrices, [fromId]);
   addedPrices[toId] ??= state.idx.products.get(toId)?.price ?? price ?? 0;
   const who = state.addedBy[fromId];

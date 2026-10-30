@@ -5,6 +5,9 @@ import './styles.css';
 
 createRoot(document.getElementById('root')!).render(<StrictMode><App /></StrictMode>);
 
+// Safari en iPhone no activa :active (el pulsado) si la página no escucha ningún toque
+document.addEventListener('touchstart', () => {}, { passive: true });
+
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   const hadController = !!navigator.serviceWorker.controller;
   navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' }).then((reg) => {

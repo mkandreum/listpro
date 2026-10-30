@@ -1,28 +1,22 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Check, Copy, LogOut, Pencil, Send, UserPlus, Users, X } from 'lucide-react';
 import { inkOn, relativeTime } from '../lib';
 import { initials } from '../share';
 import { createSync, joinSync, leaveSync, toast, upsertMe, useStore, validCode } from '../store';
 import type { Member } from '../types';
 import { haptic } from '../fx/haptics';
+import { useSheet } from '../fx/sheet';
 
 /** Hoja inferior con fondo, Escape para cerrar y el scroll de la página bloqueado. */
 export function Sheet({ onClose, label, className = '', children }: { onClose: () => void; label: string; className?: string; children: React.ReactNode }) {
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    ref.current?.focus();
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
-    addEventListener('keydown', onKey);
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => { removeEventListener('keydown', onKey); document.body.style.overflow = prev; };
-  }, [onClose]);
+  const { ref, close } = useSheet(onClose);
+  useEffect(() => { ref.current?.focus({ preventScroll: true }); }, [ref]);
   return (
     <>
-      <div className="sheet-scrim" onClick={onClose} />
+      <div className="sheet-scrim" onClick={close} />
       <div ref={ref} tabIndex={-1} className={`sheet ${className}`} role="dialog" aria-modal="true" aria-label={label}>
         <div className="grip" />
-        <button className="icon-btn sheet-x" onClick={onClose} aria-label="Cerrar"><X /></button>
+        <button className="icon-btn sheet-x" onClick={close} aria-label="Cerrar"><X /></button>
         {children}
       </div>
     </>

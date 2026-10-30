@@ -225,12 +225,32 @@ export interface ComparedProduct {
   refPrice: number | null;
   refFormat: string | null;
   image: string | null;
+  /** Precio por kilo, litro, unidad o lavado calculado igual para todos los súper. */
+  per?: { value: number; label: string } | null;
+  match?: MatchKind;
+  /** Envases que hacen falta para la misma cantidad que llevas. */
+  packs?: number;
 }
 
-/** "same": mismo código de barras. "similar": mismo pasillo, nombre y formato parecidos. */
+/** "same": mismo código de barras. "equivalent": el mismo producto de otra marca. "similar": del mismo tipo, con diferencias. */
+export type MatchKind = 'same' | 'equivalent' | 'similar';
+
+/** Una alternativa de un producto de la cesta, con lo que costaría para la misma cantidad. */
+export interface Alternative extends ComparedProduct {
+  match: MatchKind;
+  packs: number;
+  cost: number;
+  saving: number;
+  /** El ahorro se ha calculado por kilo o litro porque los envases no cuadran. */
+  approx: boolean;
+  comparable: boolean;
+}
+
+export type Alternatives = Record<string, { per: ComparedProduct['per']; options: Alternative[] }>;
+
 export interface StoreMatch {
   store: string;
-  match: 'same' | 'similar';
+  match: MatchKind;
   product: ComparedProduct;
   alternatives: ComparedProduct[];
 }
@@ -238,6 +258,7 @@ export interface StoreMatch {
 export interface Comparison {
   id: string;
   store: string;
+  per?: ComparedProduct['per'];
   matches: StoreMatch[];
 }
 
@@ -251,6 +272,9 @@ export interface BasketStoreCost {
   matched: number;
   exact: number;
   similar: number;
+  equivalent?: number;
+  /** Lo que cuestan en tu súper solo los productos encontrados en este. */
+  comparedTotal?: number;
   missing: string[];
   missingCount: number;
   coverage: number;
