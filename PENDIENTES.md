@@ -23,10 +23,13 @@
   - Usa EAN exacto y, si no, equivalente por pasillo/nombre/formato. Marca “aproximado” y cuenta los que faltan.
   - Probado con aceite de oliva: ECI 14,50 €, 100 % de cobertura y −0,88 € frente a Consum.
 
+## Hecho: build APK R8
+
+- `assemblePreview` (R8, `isMinifyEnabled` + `isShrinkResources`, firmado con debug).
+- APK: `app/build/outputs/apk/preview/app-preview.apk` (2,29 MB).
+
 ## Pendiente
 
-- **Verificar el scrape completo de ECI** (en curso) y probar la web con Mercadona + Consum + ECI.
-- **Build APK R8** (`assemblePreview` o `assembleRelease` con minify) al final de todo.
 - **Hipercor** opcional: activar como segunda tienda ECI si se acepta el coste de otras ~1.000 páginas/día.
 
 ## Redeploy
