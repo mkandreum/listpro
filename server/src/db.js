@@ -93,6 +93,8 @@ addColumn('users', 'reset_token_hash', 'TEXT');
 addColumn('users', 'reset_token_expires_at', 'TEXT');
 addColumn('users', 'reset_requested_at', 'TEXT');
 addColumn('users', 'last_login_at', 'TEXT');
+// Última vez que usó la app (cualquier llamada con sesión; se apunta como mucho cada 10 minutos)
+addColumn('users', 'last_seen_at', 'TEXT');
 db.exec(`
   CREATE INDEX IF NOT EXISTS products_store ON products(store, active);
   CREATE INDEX IF NOT EXISTS products_ean ON products(ean);

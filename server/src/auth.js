@@ -72,6 +72,8 @@ export function createUser({ id, name, email, passwordHash, listCode, store = nu
   db.prepare(`INSERT INTO users (id, email, name, password_hash, token_version, list_code, store, created_at, plan, plan_started_at, invite_code, invited_by)
     VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?)`)
     .run(userId, email, name, passwordHash, CODE_RE.test(listCode ?? '') ? listCode : null, store, now, plan === 'free' ? 'free' : 'pro', now, inviteCode, invitedBy);
+  // Registrarse cuenta como primer acceso: así el panel no lo muestra como "nunca ha entrado"
+  db.prepare('UPDATE users SET last_login_at = ?, last_seen_at = ? WHERE id = ?').run(now, now, userId);
   return findById(userId);
 }
 
@@ -120,7 +122,15 @@ export function requireAuth(req, res, next) {
   if (!user || (payload.tv ?? 0) !== user.token_version)
     return res.status(401).json({ error: 'Tu sesión ha caducado. Vuelve a entrar.', code: 'SESSION_REVOKED' });
   req.user = user;
+  touchSeen(user);
   next();
+}
+
+/** Apunta que el usuario está usando la app (como mucho una escritura cada 10 minutos por usuario). */
+function touchSeen(user) {
+  const now = Date.now();
+  if (user.last_seen_at && now - Date.parse(user.last_seen_at) < 10 * 60_000) return;
+  try { db.prepare('UPDATE users SET last_seen_at = ? WHERE id = ?').run(new Date(now).toISOString(), user.id); } catch { /* no es crítico */ }
 }
 
 /** Límite por clave en ventana deslizante (memoria del proceso; suficiente para una sola instancia). */

@@ -345,8 +345,30 @@ const adminUser = (u) => ({
   planStartedAt: u.plan_started_at ?? null, createdAt: u.created_at,
   lastLoginAt: u.last_login_at ?? null, inviteCode: u.invite_code ?? null,
   inviteUsedAt: u.invite_used_at ?? null, invitedBy: u.invited_by ?? null,
-  listCode: u.list_code ?? null, store: u.store ?? null,
+  listCode: u.list_code ?? null, store: u.store ?? null, lastSeenAt: u.last_seen_at ?? null,
 });
+
+/** Lo que el panel enseña en la ficha de un usuario: quién le invitó, a quién invitó y su lista. */
+function adminUserDetail(u) {
+  const by = u.invited_by ? findById(u.invited_by) : null;
+  const invitees = db.prepare('SELECT id, name, email, created_at FROM users WHERE invited_by = ? ORDER BY created_at DESC LIMIT 50').all(u.id)
+    .map((x) => ({ id: x.id, name: x.name, email: x.email, createdAt: x.created_at }));
+  let list = null;
+  if (u.list_code) {
+    const row = db.prepare('SELECT data, updated_at FROM lists WHERE code = ?').get(u.list_code);
+    if (row) {
+      const data = JSON.parse(row.data);
+      list = {
+        code: u.list_code, updatedAt: row.updated_at,
+        members: (data.members ?? []).map((m) => ({ id: m.id, name: m.name, hue: m.hue })),
+        products: Object.keys(data.basket ?? {}).length,
+        savedBaskets: (data.savedBaskets ?? []).length,
+        expenses: (data.expenses ?? []).length,
+      };
+    }
+  }
+  return { ...adminUser(u), invitedByUser: by ? { id: by.id, name: by.name, email: by.email } : null, invitees, list };
+}
 const logAdmin = (action, userId, details = null) =>
   db.prepare('INSERT INTO admin_audit (action, user_id, details, at) VALUES (?, ?, ?, ?)')
     .run(action, userId ?? null, details ? JSON.stringify(details) : null, new Date().toISOString());
@@ -371,8 +393,29 @@ app.get('/api/admin/users', requireAdmin, (req, res) => {
 app.get('/api/admin/users/:id', requireAdmin, (req, res) => {
   const u = findById(req.params.id);
   if (!u) return res.status(404).json({ error: 'Usuario no encontrado.' });
-  res.json(adminUser(u));
+  res.json(adminUserDetail(u));
 });
+
+// Cerrar todas sus sesiones (por ejemplo, si le han robado el móvil)
+app.post('/api/admin/users/:id/logout', requireAdmin, (req, res) => {
+  const u = findById(req.params.id);
+  if (!u) return res.status(404).json({ error: 'Usuario no encontrado.' });
+  db.prepare('UPDATE users SET token_version = token_version + 1 WHERE id = ?').run(u.id);
+  logAdmin('user.logout', u.id);
+  res.json(adminUserDetail(findById(u.id)));
+});
+
+// Borrar la cuenta. Su lista sigue existiendo para los demás miembros.
+app.delete('/api/admin/users/:id', requireAdmin, (req, res) => {
+  const u = findById(req.params.id);
+  if (!u) return res.status(404).json({ error: 'Usuario no encontrado.' });
+  db.prepare('UPDATE users SET invited_by = NULL WHERE invited_by = ?').run(u.id);
+  db.prepare('DELETE FROM users WHERE id = ?').run(u.id);
+  logAdmin('user.delete', u.id, { email: u.email, name: u.name });
+  res.status(204).end();
+});
+
+app.get('/api/admin/smtp', requireAdmin, (_req, res) => res.json(publicSmtp()));
 
 app.patch('/api/admin/users/:id', requireAdmin, (req, res) => {
   const u = findById(req.params.id);
@@ -465,7 +508,26 @@ app.get('/api/admin/stats', requireAdmin, (_req, res) => {
     SUM(CASE WHEN invite_used_at IS NOT NULL THEN 1 ELSE 0 END) AS invitesUsed,
     SUM(CASE WHEN invite_code IS NOT NULL AND invite_used_at IS NULL THEN 1 ELSE 0 END) AS invitesPending
     FROM users`).get();
-  res.json({ ...stats, smtpConfigured: smtpConfigured() });
+  // Con la tabla vacía, SUM devuelve null
+  for (const k of Object.keys(stats)) stats[k] = stats[k] ?? 0;
+  const since = (days) => new Date(Date.now() - days * 86_400_000).toISOString();
+  const seen = (days) => db.prepare('SELECT COUNT(*) AS n FROM users WHERE COALESCE(last_seen_at, last_login_at, created_at) >= ?').get(since(days)).n;
+  // Altas por día de los últimos 30 días (todos los días, también los que no hubo ninguna)
+  const rows = new Map(db.prepare("SELECT substr(created_at, 1, 10) AS day, COUNT(*) AS n FROM users WHERE created_at >= ? GROUP BY day").all(since(30)).map((r) => [r.day, r.n]));
+  const signups = Array.from({ length: 30 }, (_, i) => {
+    const day = new Date(Date.now() - (29 - i) * 86_400_000).toISOString().slice(0, 10);
+    return { day, n: rows.get(day) ?? 0 };
+  });
+  let lists = 0, sharedLists = 0;
+  for (const r of db.prepare('SELECT data FROM lists').iterate()) {
+    lists++;
+    try { if ((JSON.parse(r.data).members ?? []).length > 1) sharedLists++; } catch { /* lista dañada */ }
+  }
+  const catalogs = STORES.map((s) => {
+    const m = getCatalog(s.id).meta;
+    return { id: s.id, name: s.name, hue: s.hue, count: m.count ?? 0, updatedAt: m.updatedAt ?? null, scraping: isScraping(s.id) };
+  });
+  res.json({ ...stats, smtpConfigured: smtpConfigured(), active7: seen(7), active30: seen(30), signups, lists, sharedLists, catalogs });
 });
 
 // --- Planes de recetas con IA ---
