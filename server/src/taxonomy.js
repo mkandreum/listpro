@@ -7,6 +7,8 @@
 // pensados para hacer la compra, y cada nivel lleva su emoji. Lo que Mercadona añada y no esté
 // mapeado cae en el pasillo "Otros" con el emoji de su categoría, nunca se pierde.
 
+import { db } from './db.js';
+
 export const SECTIONS = [
   { id: 'frescos', icon: 'leaf', blurb: 'Fruta, verdura, carne, pescado, charcutería y pan del día.', hue: '#2FD27A', name: 'Frescos', emoji: '🥬', categories: [1, 3, 2, 4, 5] },
   { id: 'lacteos', icon: 'milk', blurb: 'Leche, huevos, mantequilla, yogures y postres.', hue: '#7CC8FF', name: 'Lácteos y huevos', emoji: '🥛', categories: [6, 11] },
@@ -92,11 +94,44 @@ export const SUBCATEGORY_EMOJI = {
 const sectionByCategory = new Map();
 for (const s of SECTIONS) for (const c of s.categories) sectionByCategory.set(c, s.id);
 
+// ───────────── Consum ─────────────
+// Su nivel 1 decide el pasillo; algunas categorías de nivel 2 se recolocan para que caigan donde en Mercadona.
+const CONSUM_TOP = {
+  2811: 'despensa', 1690: 'bebidas', 2812: 'frescos', 4108: 'frescos', 1833: 'congelados', 1783: 'congelados',
+  5281: 'despensa', 2297: 'bebe', 1239: 'hogar', 2814: 'cuidado', 2469: 'mascotas', 1486: 'hogar',
+};
+const CONSUM_CATEGORY = { 2055: 'lacteos', 5283: 'frescos', 5284: 'hogar', 5285: 'cuidado', 5286: 'hogar' };
+export const consumSection = (topId, categoryId) => CONSUM_CATEGORY[categoryId] ?? CONSUM_TOP[topId] ?? OTHER_SECTION.id;
+
+// Emojis de las categorías de Consum (nivel 2, id de Consum)
+const CONSUM_EMOJI = {
+  5298: '🍬', 1970: '🥜', 1639: '🍝', 2490: '🍲', 1525: '🫒', 1852: '☕', 5153: '🍞', 1646: '🌾', 2055: '🥛', 2366: '🌮', 2218: '🥗',
+  2482: '💧', 1701: '🍾', 1707: '🍺', 2484: '🫧', 1720: '⚡', 1721: '🥃', 1728: '🥤', 1739: '🍷', 1744: '🍷', 1779: '🧃',
+  2148: '🥩', 4058: '🔪', 2005: '🥓', 4070: '🍖', 2019: '🧀', 4093: '🧀', 2171: '🐟', 2187: '🥕', 2179: '🍎',
+  1959: '🥖', 5019: '🍞', 5017: '🍔', 5020: '🥨', 5021: '🥐', 5022: '🥟', 5031: '🎂',
+  4111: '🍱', 4112: '🥫', 2505: '🥩', 2521: '🦐', 1792: '🍝', 5211: '🍤', 2514: '🥦', 5215: '🍕', 2487: '🧊', 1784: '🍦', 5096: '🥐',
+  5282: '🌱', 5283: '🌱', 5284: '🌱', 5285: '🌱', 5286: '🌱', 2298: '🍼', 2314: '🍼', 2312: '🛁', 2320: '🧷', 2325: '👶',
+  1277: '🧻', 5051: '🧺', 5074: '🧹', 5053: '🍽️', 5057: '🚽', 1240: '🧽', 1259: '🌬️', 1314: '🦟', 5067: '👟',
+  1475: '💇', 1403: '🧴', 1413: '🧖', 5131: '💅', 5129: '🧼', 1452: '🌬️', 1463: '🌸', 1456: '🦷', 5132: '🪒', 1412: '☀️',
+  1427: '💄', 1442: '🪒', 1393: '🌹', 1399: '🎀', 5050: '💊', 1489: '🦴', 4055: '🐱', 1491: '🐶', 4006: '🐹',
+  1487: '🎁', 4540: '📚', 5011: '🍳', 4542: '🥡', 1299: '🥤', 4543: '🌻', 2462: '🔋', 1509: '🕯️',
+};
+const CONSUM_OFFSET = 1_000_000;
+
+// Pasillo de las categorías de otros súper: lo guarda el lector al descargar el catálogo
+let extraSections = null;
+export function reloadSections() {
+  extraSections = new Map(db.prepare('SELECT id, section FROM categories WHERE section IS NOT NULL').all().map((r) => [r.id, r.section]));
+}
+
 export function sectionIdFor(categoryId) {
-  return sectionByCategory.get(categoryId) ?? OTHER_SECTION.id;
+  if (sectionByCategory.has(categoryId)) return sectionByCategory.get(categoryId);
+  if (!extraSections) reloadSections();
+  return extraSections.get(categoryId) ?? OTHER_SECTION.id;
 }
 
 export function categoryEmoji(categoryId) {
+  if (categoryId >= CONSUM_OFFSET) return CONSUM_EMOJI[categoryId - CONSUM_OFFSET] ?? '🛒';
   return CATEGORY_META[categoryId]?.emoji ?? '🛒';
 }
 
@@ -106,9 +141,9 @@ export function subcategoryEmoji(subcategoryId, parentId) {
 
 /**
  * Construye el árbol pasillo → categoría → subcategoría a partir de las filas de la BD,
- * respetando el orden de Mercadona dentro de cada pasillo.
+ * respetando el orden de cada súper dentro de cada pasillo.
  */
-export function buildTree(categories, subcategories, counts) {
+export function buildTree(categories, subcategories, counts, store = 'mercadona') {
   const subsByParent = new Map();
   for (const s of subcategories) {
     const n = counts.get(s.id) ?? 0;
@@ -124,12 +159,14 @@ export function buildTree(categories, subcategories, counts) {
     return { id, name: c.name, emoji: categoryEmoji(id), count: subs.reduce((a, s) => a + s.count, 0), subcategories: subs };
   };
 
+  // En Mercadona el orden de cada pasillo es el de SECTIONS; en los demás, el de su tienda
+  const idsOf = (s) => (store === 'mercadona' ? s.categories : categories.filter((c) => sectionIdFor(c.id) === s.id).map((c) => c.id));
   const sections = SECTIONS.map((s) => {
-    const cats = s.categories.map(toCat).filter(Boolean);
+    const cats = idsOf(s).map(toCat).filter(Boolean);
     return { id: s.id, name: s.name, emoji: s.emoji, hue: s.hue, icon: s.icon, blurb: s.blurb, count: cats.reduce((a, c) => a + c.count, 0), categories: cats };
   }).filter((s) => s.categories.length);
 
-  const known = new Set(SECTIONS.flatMap((s) => s.categories));
+  const known = new Set(SECTIONS.flatMap(idsOf));
   const others = categories.filter((c) => !known.has(c.id)).map((c) => toCat(c.id)).filter(Boolean);
   if (others.length) {
     sections.push({ ...OTHER_SECTION, count: others.reduce((a, c) => a + c.count, 0), categories: others });

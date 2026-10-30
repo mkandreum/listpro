@@ -1,24 +1,31 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Check, ChevronRight, ReceiptText, RotateCcw, ShoppingBasket, Trash2, TrendingDown, TrendingUp } from 'lucide-react';
+import { ArrowRightLeft, Check, ChevronRight, PiggyBank, ReceiptText, RotateCcw, ShoppingBasket, Trash2, TrendingDown, TrendingUp } from 'lucide-react';
+import { api } from '../api';
 import { money, units } from '../lib';
 import { href, navigate } from '../router';
 import {
-  basketLines, checkoutLines, clearBasket, deleteBasket, dropMissing, finishShop, isShared, purchaseShares, reuseBasket, toast, toggleInCart, useStore,
+  basketLines, checkoutLines, clearBasket, deleteBasket, dropMissing, finishShop, isShared, missingIds, moveToStore, purchaseShares, reuseBasket, storeInfo, storeOf,
+  toast, toggleInCart, useStore,
 } from '../store';
-import type { Product, SplitMode } from '../types';
+import type { Cheaper, Product, SplitMode } from '../types';
+import { PillBar } from '../components/Pills';
+import { StoreName, Thumb } from '../components/Stores';
 import { Price, ProductImage, QtyControl } from '../components/ProductTag';
 import { Empty } from '../components/Chrome';
 import { Avatar, SharePill, ShareSheet, Sheet } from '../components/Share';
 import { haptic } from '../fx/haptics';
 import { useTweened } from '../fx/motion';
 
-function defaultName() {
-  return `Compra del ${new Date().toLocaleDateString('es-ES', { day: 'numeric', month: 'long' })}`;
+function defaultName(store?: string) {
+  const day = new Date().toLocaleDateString('es-ES', { day: 'numeric', month: 'long' });
+  return store ? `Compra en ${storeInfo(store).name} del ${day}` : `Compra del ${day}`;
 }
 
 export function Basket({ onOpen, join }: { onOpen: (p: Product) => void; join?: string }) {
-  const catalog = useStore((s) => s.catalog);
   const basket = useStore((s) => s.basket);
+  const store = useStore((s) => s.store);
+  const allStores = useStore((s) => s.stores);
+  const catalogs = useStore((s) => s.catalogs);
   const addedPrices = useStore((s) => s.addedPrices);
   const inCart = useStore((s) => s.inCart);
   const idx = useStore((s) => s.idx);
@@ -39,8 +46,31 @@ export function Basket({ onOpen, join }: { onOpen: (p: Product) => void; join?: 
   useEffect(() => { if (join !== undefined) setSharing(true); }, [join]);
   const closeShare = () => { setSharing(false); if (join !== undefined) navigate({ name: 'basket' }, true); };
 
-  const lines = useMemo(() => basketLines(), [basket, idx]); // eslint-disable-line react-hooks/exhaustive-deps
-  const missing = Object.keys(basket).filter((id) => catalog && !idx.products.has(id));
+  // Una cesta por súper: el activo primero y luego los demás que tengan algo
+  const stores = useMemo(() => {
+    const inBasket = new Set(Object.keys(basket).map(storeOf));
+    return allStores.map((s) => s.id).filter((id) => inBasket.has(id)).sort((a, b) => (a === store ? -1 : b === store ? 1 : 0));
+  }, [basket, store, allStores]);
+  const [picked, setPicked] = useState<string | null>(null);
+  const tab = picked && stores.includes(picked) ? picked : stores.includes(store) ? store : stores[0] ?? store;
+  const multi = stores.length > 1;
+  const lines = useMemo(() => basketLines(tab), [basket, idx, tab]); // eslint-disable-line react-hooks/exhaustive-deps
+  const subtotal = (s: string) => basketLines(s).reduce((a, l) => a + l.p.price * l.qty, 0);
+  const missing = missingIds().filter((id) => storeOf(id) === tab);
+  const loadingStore = Object.keys(basket).some((id) => storeOf(id) === tab) && !catalogs[tab];
+
+  // Lo que sale más barato en otro súper (se pide al servidor cuando cambia la cesta)
+  const [cheaper, setCheaper] = useState<Cheaper>({});
+  const [showCheaper, setShowCheaper] = useState(false);
+  const ids = lines.map((l) => l.p.id).join(',');
+  useEffect(() => {
+    if (!ids) { setCheaper({}); return; }
+    let alive = true;
+    const t = setTimeout(() => api.cheaper(ids.split(',')).then((c) => alive && setCheaper(c)).catch(() => {}), 400);
+    return () => { alive = false; clearTimeout(t); };
+  }, [ids]);
+  const savings = lines.filter((l) => cheaper[l.p.id]).map((l) => ({ l, c: cheaper[l.p.id] }));
+  const totalSaving = savings.reduce((a, x) => a + x.c.saving * x.l.qty, 0);
   const total = lines.reduce((a, l) => a + l.p.price * l.qty, 0);
   const shownTotal = useTweened(total);
   const doneCount = lines.filter((l) => inCart.includes(l.p.id)).length;
@@ -68,15 +98,30 @@ export function Basket({ onOpen, join }: { onOpen: (p: Product) => void; join?: 
         <SharePill onClick={() => setSharing(true)} />
       </div>
 
-      {lines.length === 0 && missing.length === 0 ? (
+      {multi && (
+        <>
+          <PillBar label="Cestas por súper" active={stores.indexOf(tab)} onSelect={(i) => { haptic.tap(); setPicked(stores[i]); setShowCheaper(false); }}
+            items={stores.map((s) => ({ key: s, label: storeInfo(s).name, hue: storeInfo(s).hue, sub: money(subtotal(s)) }))} />
+          <p className="muted small" style={{ margin: '-6px 4px 12px' }}>
+            Tienes cesta en {stores.length} súper: en total {money(stores.reduce((a, s) => a + subtotal(s), 0))}. Termina la compra de cada uno por separado.
+          </p>
+        </>
+      )}
+      {!multi && lines.length > 0 && tab !== store && (
+        <p className="muted small" style={{ margin: '-6px 4px 12px' }}>Esta cesta es de <StoreName id={tab} /> aunque ahora estés viendo {storeInfo(store).name}.</p>
+      )}
+
+      {loadingStore ? (
+        <div className="skeleton" style={{ height: 220 }} />
+      ) : lines.length === 0 && missing.length === 0 ? (
         <Empty icon={<ShoppingBasket size={34} strokeWidth={2.5} />} title="Tu cesta está vacía">
           <p className="muted">Entra en un pasillo y pulsa + en lo que necesites.</p>
           <a className="btn primary" href={href({ name: 'home' })} style={{ textDecoration: 'none', marginTop: 8 }}>Ir a los pasillos</a>
         </Empty>
       ) : (
         <>
-          <section className="total-block" aria-label="Total de la cesta">
-            <div className="label num">{units(basket)} unidades · {lines.length} productos</div>
+          <section className="total-block" aria-label="Total de la cesta" style={multi ? { '--store': storeInfo(tab).hue } as React.CSSProperties : undefined}>
+            <div className="label num">{multi && `${storeInfo(tab).name} · `}{lines.reduce((a, l) => a + l.qty, 0)} unidades · {lines.length} productos</div>
             <div className="big num"><Price value={shownTotal} className="" /></div>
             <div className="progress" role="progressbar" aria-valuemin={0} aria-valuemax={lines.length} aria-valuenow={doneCount} aria-label="Productos ya en el carro">
               <span style={{ width: `${lines.length ? (doneCount / lines.length) * 100 : 0}%` }} />
@@ -90,6 +135,47 @@ export function Basket({ onOpen, join }: { onOpen: (p: Product) => void; join?: 
             <div className={`notice ${delta > 0 ? 'up' : 'down'}`}>
               {delta > 0 ? <TrendingUp size={20} /> : <TrendingDown size={20} />}
               <span className="num">{changed} producto{changed > 1 ? 's han' : ' ha'} cambiado de precio desde que lo{changed > 1 ? 's' : ''} añadiste ({delta > 0 ? '+' : ''}{money(delta)}).</span>
+            </div>
+          )}
+          {savings.length > 0 && (
+            <div className="notice down cheaper-notice">
+              <PiggyBank size={20} />
+              <span className="num">
+                {savings.length} producto{savings.length > 1 ? 's' : ''} te sale{savings.length > 1 ? 'n' : ''} más barato{savings.length > 1 ? 's' : ''} en otro súper: ahorras unos {money(totalSaving)}.{' '}
+                <button onClick={() => { haptic.tap(); setShowCheaper((v) => !v); }}>{showCheaper ? 'Ocultar' : 'Ver cuáles'}</button>
+              </span>
+            </div>
+          )}
+          {showCheaper && savings.length > 0 && (
+            <div className="panel cheaper-list" style={{ marginTop: 10 }}>
+              {savings.map(({ l, c }) => (
+                <div key={l.p.id} className="cmp-row">
+                  <Thumb src={c.product.image} />
+                  <div className="info">
+                    <span className="cmp-store"><StoreName id={c.store} /><span className={`cmp-kind ${c.match}`}>{c.match === 'same' ? 'Mismo producto' : 'Parecido'}</span></span>
+                    <b>{c.product.name}</b>
+                    <span className="muted small num">en vez de {l.p.name} · {money(l.p.price)}</span>
+                  </div>
+                  <div className="right num">
+                    <b className="cheaper">{money(c.product.price)}</b>
+                    <span className="saving">−{money(c.saving * l.qty)}</span>
+                    <button className="btn small-btn" onClick={() => {
+                      haptic.success();
+                      moveToStore(l.p.id, c.product.id, c.product.price);
+                      toast(`Pasado a tu cesta de ${storeInfo(c.store).name}`);
+                    }}><ArrowRightLeft size={15} /> Mover</button>
+                  </div>
+                </div>
+              ))}
+              {savings.length > 1 && (
+                <button className="btn primary block" style={{ marginTop: 12 }} onClick={() => {
+                  haptic.success();
+                  for (const { l, c } of savings) moveToStore(l.p.id, c.product.id, c.product.price);
+                  toast(`${savings.length} productos movidos`);
+                  setShowCheaper(false);
+                }}><ArrowRightLeft size={18} /> Moverlos todos</button>
+              )}
+              <p className="muted small" style={{ marginTop: 8 }}>«Parecido» compara por precio por kilo o litro. Al mover, la cantidad se mantiene.</p>
             </div>
           )}
           {missing.length > 0 && (
@@ -162,7 +248,7 @@ export function Basket({ onOpen, join }: { onOpen: (p: Product) => void; join?: 
       )}
 
       {sharing && <ShareSheet onClose={closeShare} joinCode={join || undefined} />}
-      {checkout && <CheckoutSheet onClose={() => setCheckout(false)} />}
+      {checkout && <CheckoutSheet store={multi ? tab : undefined} onClose={() => setCheckout(false)} />}
 
       <div className="row-head" style={{ marginTop: 40 }}>
         <h2 className="h-section">Cestas guardadas</h2>
@@ -214,27 +300,27 @@ export function Basket({ onOpen, join }: { onOpen: (p: Product) => void; join?: 
 const parseAmount = (v: string) => Number(v.replace(/\s|€/g, '').replace(',', '.'));
 const fmtAmount = (v: number) => v.toFixed(2).replace('.', ',');
 
-function CheckoutSheet({ onClose }: { onClose: () => void }) {
+function CheckoutSheet({ store, onClose }: { store?: string; onClose: () => void }) {
   const members = useStore((s) => s.members);
   const meId = useStore((s) => s.meId);
-  const lines = useMemo(() => checkoutLines(), []);
-  const all = basketLines().length;
+  const lines = useMemo(() => checkoutLines(store), [store]);
+  const all = basketLines(store).length;
   const estimate = lines.reduce((a, l) => a + l.p.price * l.qty, 0);
   const canSplit = isShared() && members.length > 1;
-  const [name, setName] = useState(defaultName);
+  const [name, setName] = useState(() => defaultName(store));
   const [amount, setAmount] = useState(fmtAmount(estimate));
   const [paidBy, setPaidBy] = useState(meId && members.some((m) => m.id === meId) ? meId : members[0]?.id);
   const [mode, setMode] = useState<SplitMode | 'none'>('equal');
   const [among, setAmong] = useState(members.map((m) => m.id));
   const value = parseAmount(amount);
   const valid = name.trim() && Number.isFinite(value) && value > 0;
-  const shares = canSplit && mode !== 'none' && valid ? purchaseShares({ amount: value, mode, among }) : {};
+  const shares = canSplit && mode !== 'none' && valid ? purchaseShares({ amount: value, mode, among, store }) : {};
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!valid) return;
     if (canSplit && mode !== 'none' && !among.length) return toast('Elige entre quién se reparte');
-    finishShop({ name: name.trim(), amount: value, ...(canSplit && mode !== 'none' ? { paidBy, mode, among } : {}) });
+    finishShop({ name: name.trim(), amount: value, store, ...(canSplit && mode !== 'none' ? { paidBy, mode, among } : {}) });
     haptic.success();
     toast(canSplit && mode !== 'none' ? 'Compra guardada y repartida' : `Guardada: ${name.trim()}`);
     onClose();
@@ -247,7 +333,7 @@ function CheckoutSheet({ onClose }: { onClose: () => void }) {
         <p className="muted">
           {lines.length < all
             ? `Entran los ${lines.length} productos que están en el carro. Los otros ${all - lines.length} se quedan en la cesta.`
-            : `Entran los ${lines.length} productos de la cesta.`}
+            : `Entran los ${lines.length} productos de la cesta${store ? ` de ${storeInfo(store).name}` : ''}.`}
         </p>
 
         <label className="text-field">

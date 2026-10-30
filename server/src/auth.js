@@ -41,17 +41,17 @@ export async function checkPassword(user, password) {
 export const signSession = (u) =>
   jwt.sign({ sub: u.id, tv: u.token_version }, secret, { expiresIn: SESSION_SECONDS, algorithm: 'HS256' });
 
-export const toUser = (u) => ({ id: u.id, name: u.name, email: u.email, listCode: u.list_code ?? null, createdAt: u.created_at });
+export const toUser = (u) => ({ id: u.id, name: u.name, email: u.email, listCode: u.list_code ?? null, store: u.store ?? null, createdAt: u.created_at });
 
 export const findByEmail = (email) => db.prepare('SELECT * FROM users WHERE email = ?').get(email) ?? null;
 export const findById = (id) => db.prepare('SELECT * FROM users WHERE id = ?').get(id) ?? null;
 
 /** El id puede venir del dispositivo (su id de miembro de la lista), para que su historial de cuentas siga siendo suyo. */
-export function createUser({ id, name, email, passwordHash, listCode }) {
+export function createUser({ id, name, email, passwordHash, listCode, store = null }) {
   const userId = ID_RE.test(id ?? '') && !findById(id) ? id : crypto.randomBytes(9).toString('base64url').toLowerCase().replace(/[^a-z0-9]/g, 'x');
   const now = new Date().toISOString();
-  db.prepare('INSERT INTO users (id, email, name, password_hash, token_version, list_code, created_at) VALUES (?, ?, ?, ?, 0, ?, ?)')
-    .run(userId, email, name, passwordHash, CODE_RE.test(listCode ?? '') ? listCode : null, now);
+  db.prepare('INSERT INTO users (id, email, name, password_hash, token_version, list_code, store, created_at) VALUES (?, ?, ?, ?, 0, ?, ?, ?)')
+    .run(userId, email, name, passwordHash, CODE_RE.test(listCode ?? '') ? listCode : null, store, now);
   return findById(userId);
 }
 

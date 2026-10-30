@@ -2,7 +2,7 @@ import { useSyncExternalStore } from 'react';
 import { api } from './api';
 import { uid } from './lib';
 import { MEMBER_HUES, merge3, splitByWeights, splitEqual } from './share';
-import type { Catalog, Category, Expense, ListData, MealPlan, Member, PlanPrefs, Product, SavedBasket, Section, Session, SplitMode, Subcategory } from './types';
+import type { Catalog, Category, Expense, ListData, MealPlan, Member, PlanPrefs, Product, SavedBasket, Section, Session, SplitMode, StoreInfo, Subcategory } from './types';
 
 export type ThemePref = 'system' | 'light' | 'dark';
 
@@ -14,8 +14,22 @@ interface Indexes {
   aisleOrder: Map<number, number>; // subcategoría → orden de tienda
 }
 
+/** Súper con catálogo. La lista real llega de /api/stores; esta es la de partida (y la de sin red). */
+export const DEFAULT_STORES: StoreInfo[] = [
+  { id: 'mercadona', name: 'Mercadona', hue: '#00A650', count: 0, updatedAt: null },
+  { id: 'consum', name: 'Consum', hue: '#F28C00', count: 0, updatedAt: null },
+];
+/** El súper de un producto por su id: los de Consum empiezan por "c:"; los de Mercadona no llevan prefijo. */
+export const storeOf = (productId: string): string => (productId.startsWith('c:') ? 'consum' : 'mercadona');
+
 export interface State {
+  /** Súper que se está viendo: su catálogo es `catalog`. */
+  store: string;
+  stores: StoreInfo[];
+  /** Catálogo del súper activo. */
   catalog: Catalog | null;
+  /** Todos los catálogos descargados (el activo y los de otros súper que hay en la cesta). */
+  catalogs: Record<string, Catalog>;
   catalogError: boolean;
   idx: Indexes;
   basket: Record<string, number>;
@@ -52,8 +66,12 @@ function save(key: string, value: unknown) {
 
 const emptyIdx = (): Indexes => ({ products: new Map(), sections: new Map(), categories: new Map(), subcategories: new Map(), aisleOrder: new Map() });
 
+const savedAuth = load<Session | null>('listproAuth', null);
 let state: State = {
+  store: load<string | null>('listproStore', null) ?? savedAuth?.user.store ?? 'mercadona',
+  stores: load<StoreInfo[]>('listproStores', DEFAULT_STORES),
   catalog: null,
+  catalogs: {},
   catalogError: false,
   idx: emptyIdx(),
   basket: load('listproBasket', {}),
@@ -71,7 +89,7 @@ let state: State = {
   expenses: load('listproExpenses', []),
   meId: load<string | null>('listproMeId', null),
   syncBase: load<ListData | null>('listproSyncBase', null),
-  auth: load<Session | null>('listproAuth', null),
+  auth: savedAuth,
   onboarded: load('listproOnboarded', false),
   guest: load('listproGuest', false),
 };
@@ -89,60 +107,104 @@ export function useStore<T>(selector: (s: State) => T): T {
 export const getState = () => state;
 
 // --- Catálogo ---
-function buildIndexes(c: Catalog): Indexes {
+/**
+ * Índices sobre todos los catálogos descargados: así la cesta encuentra los productos de cualquier
+ * súper. Los pasillos salen del activo; categorías y subcategorías no chocan porque sus ids son de cada súper.
+ */
+function buildIndexes(active: string, catalogs: Record<string, Catalog>): Indexes {
   const idx = emptyIdx();
-  let order = 0;
-  for (const s of c.sections) {
-    idx.sections.set(s.id, s);
-    for (const cat of s.categories) {
-      idx.categories.set(cat.id, { ...cat, section: s.id });
-      for (const sub of cat.subcategories) {
-        idx.subcategories.set(sub.id, { ...sub, category: cat.id, section: s.id });
-        idx.aisleOrder.set(sub.id, order++);
+  const ordered = [catalogs[active], ...Object.entries(catalogs).filter(([s]) => s !== active).map(([, c]) => c)].filter(Boolean);
+  for (const c of ordered) {
+    let order = 0;
+    for (const s of c.sections) {
+      if (!idx.sections.has(s.id)) idx.sections.set(s.id, s);
+      for (const cat of s.categories) {
+        idx.categories.set(cat.id, { ...cat, section: s.id });
+        for (const sub of cat.subcategories) {
+          idx.subcategories.set(sub.id, { ...sub, category: cat.id, section: s.id });
+          idx.aisleOrder.set(sub.id, order++);
+        }
       }
     }
+    for (const p of c.products) idx.products.set(p.id, p.store ? p : { ...p, store: storeOf(p.id) });
   }
-  for (const p of c.products) idx.products.set(p.id, p);
   return idx;
 }
 
+function putCatalog(store: string, c: Catalog) {
+  const catalogs = { ...state.catalogs, [store]: c };
+  set({ catalogs, catalog: catalogs[state.store] ?? null, idx: buildIndexes(state.store, catalogs) });
+}
+
 const CATALOG_CACHE = 'listpro-data-v1';
+// Mercadona conserva la clave de siempre para aprovechar lo que ya hay guardado
+const catalogPath = (store: string) => (store === 'mercadona' ? '/api/catalog' : `/api/catalog?store=${encodeURIComponent(store)}`);
 
 /** Pinta al instante el último catálogo guardado; la red lo refresca después. */
-async function loadCachedCatalog() {
+async function loadCachedCatalog(store: string) {
   try {
-    const hit = await (await caches.open(CATALOG_CACHE)).match('/api/catalog');
-    if (hit && !state.catalog) {
+    const hit = await (await caches.open(CATALOG_CACHE)).match(catalogPath(store));
+    if (hit && !state.catalogs[store]) {
       const c = (await hit.json()) as Catalog;
-      if (!state.catalog) set({ catalog: c, idx: buildIndexes(c) });
+      if (!state.catalogs[store]) putCatalog(store, c);
     }
   } catch { /* sin Cache API (http sin TLS, modo privado) */ }
 }
 
-export async function loadCatalog(): Promise<boolean> {
-  if (!state.catalog) await loadCachedCatalog();
+/** Descarga (o refresca) el catálogo de un súper. Devuelve true si había precios nuevos. */
+export async function loadCatalog(store: string = state.store): Promise<boolean> {
+  if (!state.catalogs[store]) await loadCachedCatalog(store);
   try {
-    const res = await fetch('/api/catalog', { cache: 'no-cache' });
+    const res = await fetch(catalogPath(store), { cache: 'no-cache' });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const copy = res.clone();
-    caches.open(CATALOG_CACHE).then((cache) => cache.put('/api/catalog', copy)).catch(() => {});
+    caches.open(CATALOG_CACHE).then((cache) => cache.put(catalogPath(store), copy)).catch(() => {});
     const c = (await res.json()) as Catalog;
-    if (state.catalog?.version === c.version && state.catalog.updatedAt === c.updatedAt) return false;
-    const changed = state.catalog != null && state.catalog.version !== c.version;
-    set({ catalog: c, idx: buildIndexes(c), catalogError: false });
-    return changed;
+    const before = state.catalogs[store];
+    if (store === state.store) set({ catalogError: false });
+    if (before?.version === c.version && before.updatedAt === c.updatedAt) return false;
+    putCatalog(store, c);
+    return before != null && before.version !== c.version;
   } catch {
-    if (!state.catalog) set({ catalogError: true });
+    if (store === state.store && !state.catalogs[store]) set({ catalogError: true });
     return false;
   }
 }
 
+/** Los súper que hay en la cesta (además del activo) también necesitan su catálogo. */
+export function loadBasketCatalogs() {
+  const needed = new Set(Object.keys(state.basket).map(storeOf));
+  for (const s of needed) if (!state.catalogs[s]) loadCatalog(s).catch(() => {});
+}
+
+export async function loadStores() {
+  try {
+    const stores = await api.stores();
+    if (stores.length) { set({ stores }); save('listproStores', stores); }
+  } catch { /* sin red: la lista guardada */ }
+}
+
+/** Cambia el súper que se ve. Si hay cuenta, lo recuerda para los otros dispositivos. */
+export async function setStore(store: string, remember = true) {
+  if (store === state.store) return;
+  set({ store, catalog: state.catalogs[store] ?? null, idx: buildIndexes(store, state.catalogs), catalogError: false });
+  save('listproStore', store);
+  const a = state.auth;
+  if (remember && a && a.user.store !== store) api.updateMe(a.token, { store }).then((user) => setAuth({ ...a, user })).catch(() => {});
+  await loadCatalog(store);
+}
+
+export const storeInfo = (id: string, s: State = state): StoreInfo =>
+  s.stores.find((x) => x.id === id) ?? DEFAULT_STORES.find((x) => x.id === id) ?? { id, name: id, hue: '#16A34A', count: 0, updatedAt: null };
+
 export async function checkCatalogUpdate() {
   if (!state.catalog) return loadCatalog();
-  try {
-    const meta = await api.catalogMeta();
-    if (meta.version !== state.catalog.version && (await loadCatalog())) toast('Precios actualizados');
-  } catch { /* sin red: seguimos con lo que hay */ }
+  for (const store of Object.keys(state.catalogs)) {
+    try {
+      const meta = await api.catalogMeta(store);
+      if (meta.version !== state.catalogs[store]?.version && (await loadCatalog(store)) && store === state.store) toast('Precios actualizados');
+    } catch { /* sin red: seguimos con lo que hay */ }
+  }
 }
 
 // --- Cesta ---
@@ -185,6 +247,26 @@ export function changeQty(id: string, delta: number) {
   }
   set({ basket, addedPrices, inCart, addedBy, pickedBy });
   persistList();
+  if (next > 0 && !state.catalogs[storeOf(id)]) loadCatalog(storeOf(id)).catch(() => {});
+}
+
+/** Cambia un producto de la cesta por su equivalente en otro súper, con la misma cantidad. */
+export function moveToStore(fromId: string, toId: string, price?: number) {
+  const qty = state.basket[fromId];
+  if (!qty || fromId === toId) return;
+  const basket = without(state.basket, [fromId]);
+  basket[toId] = (basket[toId] ?? 0) + qty;
+  const addedPrices = without(state.addedPrices, [fromId]);
+  addedPrices[toId] ??= state.idx.products.get(toId)?.price ?? price ?? 0;
+  const who = state.addedBy[fromId];
+  set({
+    basket, addedPrices,
+    inCart: state.inCart.filter((x) => x !== fromId),
+    addedBy: who ? { ...without(state.addedBy, [fromId]), [toId]: who } : state.addedBy,
+    pickedBy: without(state.pickedBy, [fromId]),
+  });
+  persistList();
+  if (!state.catalogs[storeOf(toId)]) loadCatalog(storeOf(toId)).catch(() => {});
 }
 
 export function toggleInCart(id: string) {
@@ -200,23 +282,28 @@ export function clearBasket() {
   persistList();
 }
 
+/** Productos de la cesta que su súper ya no vende (solo de los súper cuyo catálogo tenemos). */
+export const missingIds = (s: State = state) => Object.keys(s.basket).filter((id) => s.catalogs[storeOf(id)] && !s.idx.products.has(id));
+
 export function dropMissing() {
   const basket = { ...state.basket };
-  for (const id of Object.keys(basket)) if (!state.idx.products.has(id)) delete basket[id];
+  for (const id of missingIds()) delete basket[id];
   set({ basket });
   persistList();
 }
 
-export function basketLines() {
+/** Líneas de la cesta, en el orden de la tienda. Con `store`, solo las de ese súper. */
+export function basketLines(store?: string) {
   const { basket, idx } = state;
   return Object.entries(basket)
+    .filter(([id]) => !store || storeOf(id) === store)
     .flatMap(([id, qty]) => { const p = idx.products.get(id); return p ? [{ p, qty }] : []; })
     .sort((a, b) => (idx.aisleOrder.get(a.p.subcategory) ?? 1e9) - (idx.aisleOrder.get(b.p.subcategory) ?? 1e9) || a.p.name.localeCompare(b.p.name));
 }
 
 /** Lo que entra en la compra: si has marcado algo, solo lo marcado (lo demás se queda en la cesta); si no, todo. */
-export function checkoutLines() {
-  const lines = basketLines();
+export function checkoutLines(store?: string) {
+  const lines = basketLines(store);
   const picked = lines.filter((l) => state.inCart.includes(l.p.id));
   return picked.length ? picked : lines;
 }
@@ -228,14 +315,16 @@ export interface Checkout {
   paidBy?: string;
   mode?: SplitMode;
   among?: string[];
+  /** Con varios súper en la cesta, se termina la compra de uno. */
+  store?: string;
 }
 
 /** Cuánto le toca a cada uno de una compra. Con «cada uno lo suyo», lo que pidió cada uno; lo que no es de nadie, a partes iguales. */
-export function purchaseShares(c: Required<Pick<Checkout, 'amount' | 'mode' | 'among'>>) {
+export function purchaseShares(c: Required<Pick<Checkout, 'amount' | 'mode' | 'among'>> & { store?: string }) {
   if (!c.among.length) return {};
   if (c.mode === 'equal') return splitEqual(c.amount, c.among);
   const w: Record<string, number> = Object.fromEntries(c.among.map((m) => [m, 0]));
-  for (const { p, qty } of checkoutLines()) {
+  for (const { p, qty } of checkoutLines(c.store)) {
     const cost = p.price * qty;
     const who = state.addedBy[p.id];
     if (who && who in w) w[who] += cost;
@@ -246,7 +335,7 @@ export function purchaseShares(c: Required<Pick<Checkout, 'amount' | 'mode' | 'a
 
 /** Guarda la compra en el historial, la quita de la cesta y, si la lista es compartida, la apunta en las cuentas. */
 export function finishShop(c: Checkout) {
-  const lines = checkoutLines();
+  const lines = checkoutLines(c.store);
   if (!lines.length) return false;
   const snapshot: SavedBasket['snapshot'] = {};
   for (const { p } of lines) snapshot[p.id] = { name: p.name, price: p.price, section: p.section, category: p.category };
@@ -258,7 +347,7 @@ export function finishShop(c: Checkout) {
   const ids = lines.map((l) => l.p.id);
   let expenses = state.expenses;
   if (isShared() && c.paidBy && c.among?.length && c.amount > 0) {
-    const shares = purchaseShares({ amount: c.amount, mode: c.mode ?? 'equal', among: c.among });
+    const shares = purchaseShares({ amount: c.amount, mode: c.mode ?? 'equal', among: c.among, store: c.store });
     expenses = [...expenses, {
       id: uid(), at: saved.date, title: c.name, amount: Math.round(c.amount * 100) / 100, paidBy: c.paidBy,
       shares, kind: 'purchase', mode: c.mode ?? 'equal', basketId: saved.id,
@@ -433,6 +522,8 @@ function applyRemote(data: ListData) {
   for (const [k, v] of [['listproBasket', state.basket], ['listproAddedPrices', state.addedPrices], ['listproInCart', state.inCart],
     ['listproSavedBaskets', state.savedBaskets], ['listproMembers', state.members], ['listproAddedBy', state.addedBy],
     ['listproPickedBy', state.pickedBy], ['listproExpenses', state.expenses]] as const) save(k, v);
+  // Lo que otro haya añadido de otro súper también necesita su catálogo
+  loadBasketCatalogs();
 }
 
 let pushing = false;
@@ -583,9 +674,10 @@ function linkAccountList(code: string) {
     .catch(() => {});
 }
 
-/** Tras entrar o registrarse: yo soy la cuenta, y la cuenta tiene su lista. */
+/** Tras entrar o registrarse: yo soy la cuenta, y la cuenta tiene su lista (y su súper). */
 async function adoptSession(s: Session) {
   setAuth(s);
+  if (s.user.store && s.user.store !== state.store) setStore(s.user.store, false).catch(() => {});
   setMe(s.user.id);
   set({ guest: false });
   save('listproGuest', false);
@@ -597,8 +689,8 @@ async function adoptSession(s: Session) {
   await createSync(s.user.name);
 }
 
-export async function register(name: string, email: string, password: string) {
-  const s = await api.register({ name, email, password, memberId: state.meId, listCode: state.sync.code });
+export async function register(name: string, email: string, password: string, store?: string) {
+  const s = await api.register({ name, email, password, memberId: state.meId, listCode: state.sync.code, store: store ?? state.store });
   await adoptSession(s);
 }
 

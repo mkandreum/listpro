@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { ExternalLink, X } from 'lucide-react';
 import { api } from '../api';
 import { money } from '../lib';
-import { useStore } from '../store';
+import { storeInfo, storeOf, useStore } from '../store';
+import { CompareBlock, StoreName } from './Stores';
 import type { PriceHistory, Product } from '../types';
 import { Price, ProductImage, QtyControl, Seal } from './ProductTag';
 
@@ -31,6 +32,8 @@ function HistoryChart({ history }: { history: PriceHistory['history'] }) {
 export function ProductSheet({ p, onClose }: { p: Product; onClose: () => void }) {
   const [history, setHistory] = useState<PriceHistory | null>(null);
   const sub = useStore((s) => s.idx.subcategories.get(p.subcategory));
+  const store = p.store ?? storeOf(p.id);
+  const storeName = useStore((s) => storeInfo(store, s).name);
   const closeRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
@@ -54,7 +57,7 @@ export function ProductSheet({ p, onClose }: { p: Product; onClose: () => void }
       <div className="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title">
         <div className="grip" />
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-          <span className="stamp">{sub?.name}</span>
+          <span className="sheet-tags"><StoreName id={store} />{sub && <span className="stamp">{sub.name}</span>}</span>
           <button ref={closeRef} className="icon-btn" onClick={onClose} aria-label="Cerrar"><X /></button>
         </div>
         <div className="media" style={{ position: 'relative' }}>
@@ -70,11 +73,14 @@ export function ProductSheet({ p, onClose }: { p: Product; onClose: () => void }
           </div>
           <QtyControl id={p.id} name={p.name} />
         </div>
+        <h3 className="h-block" style={{ marginTop: 22 }}>En otros súper</h3>
+        <CompareBlock p={p} />
+
         <h3 className="h-block" style={{ marginTop: 22 }}>Historial de precio</h3>
         {history ? <HistoryChart history={history.history} /> : <div className="skeleton" style={{ height: 110, marginTop: 10 }} />}
         {p.url && (
           <a className="btn block" style={{ marginTop: 18, textDecoration: 'none' }} href={p.url} target="_blank" rel="noopener noreferrer">
-            Ver en la tienda de Mercadona <ExternalLink size={18} />
+            Ver en la tienda de {storeName} <ExternalLink size={18} />
           </a>
         )}
       </div>

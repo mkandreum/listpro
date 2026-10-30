@@ -1,9 +1,10 @@
 import crypto from 'node:crypto';
 import { GoogleGenAI, Type } from '@google/genai';
-import { db } from './db.js';
+import { db, getMeta } from './db.js';
 import { sectionIdFor } from './taxonomy.js';
+import { DEFAULT_STORE, getStore, isStore, metaKey, STORES } from './stores.js';
 
-// Planes de recetas (desayunos, comidas, meriendas y cenas) con Gemini, sobre el catálogo real de Mercadona.
+// Planes de recetas (desayunos, comidas, meriendas y cenas) con Gemini, sobre el catálogo real del súper elegido.
 // La IA elige recetas y productos; los precios, la lista de la compra y el coste
 // los calcula siempre el servidor con los precios de la base de datos.
 //
@@ -104,7 +105,7 @@ export function normalizePrefs(p = {}) {
     dislikes: cleanText(p.dislikes),
     allergies: cleanText(p.allergies),
     pantry: cleanText(p.pantry, 500),
-    store: 'mercadona',
+    store: isStore(p.store) ? p.store : DEFAULT_STORE,
   };
 }
 
@@ -119,14 +120,23 @@ const NOT_FOR_MAINS = new Set([
 ]);
 // Para desayunos y meriendas sí valen bollería, cereales, café o zumos; solo se quitan velas, chuches, helados e infantil.
 const NOT_FOR_SNACKS = new Set([71, 833, 95, 97, 107, 111]);
+// Lo mismo en Consum, por sus categorías: turrones y dulces, desayuno y café, bollería dulce, tartas y helados
+const CONSUM_NOT_FOR_MAINS = new Set([1005298, 1001852, 1005021, 1005031, 1001784]);
+const CONSUM_NOT_FOR_SNACKS = new Set([1001784]);
 const FOOD_SECTIONS = new Set(['frescos', 'lacteos', 'despensa', 'congelados']);
+// Marca propia de cada súper, para que la IA la proponga cuando dé igual la marca
+const OWN_BRAND = { mercadona: 'Hacendado', consum: 'Consum' };
 const LIGHT_MEALS = new Set(['desayuno', 'merienda']);
 
-let catalogCache = null; // { version, mains, snacks, byId }
+const catalogCaches = new Map(); // súper → { version, mains, snacks, byId }
 
-function plannerCatalog(version) {
-  if (catalogCache?.version === version) return catalogCache;
-  const rows = db.prepare('SELECT id, name, size, price, ref_price, ref_format, category_id, subcategory_id, image FROM products WHERE active = 1 ORDER BY position').all();
+function plannerCatalog(store) {
+  const version = getMeta(metaKey(store, 'catalog_version')) ?? '0';
+  const cached = catalogCaches.get(store);
+  if (cached?.version === version) return cached;
+  const rows = db.prepare('SELECT id, name, size, price, ref_price, ref_format, category_id, subcategory_id, image FROM products WHERE active = 1 AND store = ? ORDER BY position').all(store);
+  const notMains = (r) => (store === 'consum' ? CONSUM_NOT_FOR_MAINS.has(r.category_id) : NOT_FOR_MAINS.has(r.subcategory_id));
+  const notSnacks = (r) => (store === 'consum' ? CONSUM_NOT_FOR_SNACKS.has(r.category_id) : NOT_FOR_SNACKS.has(r.subcategory_id));
   const byId = new Map();
   const mains = [];
   const snacks = [];
@@ -134,11 +144,12 @@ function plannerCatalog(version) {
     byId.set(r.id, r);
     if (!FOOD_SECTIONS.has(sectionIdFor(r.category_id))) continue;
     const line = `${r.id}|${r.name}|${r.size}|${r.price.toFixed(2)}`;
-    if (!NOT_FOR_MAINS.has(r.subcategory_id)) mains.push(line);
-    if (!NOT_FOR_SNACKS.has(r.subcategory_id)) snacks.push(line);
+    if (!notMains(r)) mains.push(line);
+    if (!notSnacks(r)) snacks.push(line);
   }
-  catalogCache = { version, mains, snacks, byId };
-  return catalogCache;
+  const built = { version, mains, snacks, byId };
+  catalogCaches.set(store, built);
+  return built;
 }
 
 // ───────────── Guion de variedad ─────────────
@@ -351,7 +362,8 @@ function buildPrompt({ meal, slots, prefs, catalog, share, avoid, others, feedba
   const appliances = prefs.appliances.map((a) => APPLIANCES[a]).join(', ');
   const minutes = M.maxMinutes ? Math.min(M.maxMinutes, prefs.maxMinutes) : prefs.maxMinutes;
   const who = `${prefs.people} ${prefs.people === 1 ? 'persona' : 'personas'}`;
-  return `Eres el chef y nutricionista de ListPro, una app de lista de la compra con el catálogo real de Mercadona (España). Cocinas como alguien de casa con mucha mano: platos ricos, variados, realistas y baratos.
+  const storeName = getStore(prefs.store)?.name ?? 'Mercadona';
+  return `Eres el chef y nutricionista de ListPro, una app de lista de la compra con el catálogo real de ${storeName} (España). Cocinas como alguien de casa con mucha mano: platos ricos, variados, realistas y baratos.
 Tu tarea: ${n === 1 ? `1 ${M.label.toLowerCase()}` : `${n} ${M.plural}`} para ${who}, siguiendo el guion.
 
 QUÉ ES ESTA COMIDA: ${M.guide} Referencia: ${M.kcal} kcal por ración.
@@ -387,7 +399,7 @@ ${LIGHT_MEALS.has(meal) ? '- Alterna dulce y salado; nada de repetir la misma fr
 ${others.length ? `- Esta semana también hay estas recetas en otras comidas; no las repitas ni hagas versiones parecidas: ${others.join('; ')}.\n` : ''}${avoid.length ? `- El usuario ya ha tenido estas hace poco; NO las repitas ni hagas variantes casi iguales: ${avoid.join('; ')}.\n` : ''}
 AHORRO SIN REPETIR:
 - Reaprovecha envases entre recetas (un paquete de huevos, una bolsa de espinacas, una malla de cebollas), pero usando el producto de forma distinta en cada plato.
-- Marca blanca (Hacendado) cuando dé igual, legumbre cocida, congelados y verdura de temporada para cuadrar el presupuesto.
+- Marca blanca (${OWN_BRAND[prefs.store] ?? 'la del súper'}) cuando dé igual, legumbre cocida, congelados y verdura de temporada para cuadrar el presupuesto.
 
 CÓMO RESPONDER:
 - Usa SOLO productos de la lista, citando su id exacto. Formato: id|nombre|formato|precio en €.
@@ -615,11 +627,11 @@ async function cookMeal({ meal, slots, prefs, cat, share, avoid, others, feedbac
   return { recipes, summary: cleanText(raw?.summary, 240), cost: totalOf(shoppingFor(recipes, cat.byId)) };
 }
 
-export async function createPlan(rawPrefs, catalogVersion, rawAvoid = []) {
+export async function createPlan(rawPrefs, rawAvoid = []) {
   if (!ai && !MOCK) throw new PlannerError('El planificador no está disponible ahora mismo.', 503);
   const prefs = normalizePrefs(rawPrefs);
   const avoid = cleanAvoid(rawAvoid);
-  const cat = plannerCatalog(catalogVersion);
+  const cat = plannerCatalog(prefs.store);
   if (cat.mains.length < 100) throw new PlannerError('El catálogo aún se está cargando. Prueba en un minuto.', 503);
 
   const guide = buildGuide(prefs);
@@ -647,7 +659,7 @@ export async function createPlan(rawPrefs, catalogVersion, rawAvoid = []) {
       const prev = results[meal];
       const names = Object.entries(results).filter(([m]) => m !== meal).flatMap(([, r]) => r.recipes.map((x) => x.name));
       const feedback = [
-        prev && prev.cost > budgets[meal] ? `La compra de estas recetas sale a ${euros(prev.cost)} y el máximo es ${euros(budgets[meal])}: baja ${euros(prev.cost - budgets[meal])} con productos más baratos (Hacendado, legumbres, huevos, verdura de temporada, congelados) y reaprovechando más.` : '',
+        prev && prev.cost > budgets[meal] ? `La compra de estas recetas sale a ${euros(prev.cost)} y el máximo es ${euros(budgets[meal])}: baja ${euros(prev.cost - budgets[meal])} con productos más baratos (${OWN_BRAND[prefs.store] ?? 'marca blanca'}, legumbres, huevos, verdura de temporada, congelados) y reaprovechando más.` : '',
         !prev || prev.recipes.length < guide[meal].length || !prev.recipes.every(complete) ? `Faltan recetas o alguna no tiene ingredientes o pasos suficientes: necesito ${guide[meal].length} recetas completas.` : '',
       ].filter(Boolean).join(' ');
       return cookMeal({ meal, slots: guide[meal], prefs, cat, share: budgets[meal], avoid: [...avoid, ...names].slice(0, 50), others: othersFor(meal), feedback, warnings: [] });
@@ -681,14 +693,14 @@ function save(prefs, plan) {
 }
 
 /** Cambia una receta del plan por otra distinta. Devuelve un plan nuevo (con otro id, para que se sincronice). */
-export async function swapRecipe(planId, index, catalogVersion) {
+export async function swapRecipe(planId, index) {
   if (!ai && !MOCK) throw new PlannerError('El planificador no está disponible ahora mismo.', 503);
   const old = getPlan(planId);
   const target = old?.recipes?.[index];
   if (!target) throw new PlannerError('Esa receta ya no está en el plan.', 404);
   const prefs = normalizePrefs(old.prefs);
   const meal = MEALS[target.meal] ? target.meal : 'cena';
-  const cat = plannerCatalog(catalogVersion);
+  const cat = plannerCatalog(prefs.store);
 
   // Una ficha nueva: otra base y otro formato que los de la receta que se cambia y los de ese día.
   const fresh = buildGuide({ ...prefs, meals: [meal], days: 7 })[meal];
@@ -717,7 +729,7 @@ export const plannerOptions = () => ({
   diets: Object.entries(DIETS).map(([id, label]) => ({ id, label })),
   appliances: Object.entries(APPLIANCES).map(([id, label]) => ({ id, label })),
   meals: Object.entries(MEALS).map(([id, m]) => ({ id, label: m.label })),
-  stores: [{ id: 'mercadona', label: 'Mercadona' }],
+  stores: STORES.filter((s) => (getMeta(metaKey(s.id, 'catalog_version')) ?? null) !== null).map((s) => ({ id: s.id, label: s.name })),
 });
 
 // ───────────── Plan de prueba (PLANNER_MOCK=1) ─────────────

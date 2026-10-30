@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { WifiOff } from 'lucide-react';
 import { parse, useHash } from './router';
-import { checkCatalogUpdate, loadCatalog, pullSync, refreshAccount, useStore } from './store';
+import { checkCatalogUpdate, loadBasketCatalogs, loadCatalog, loadStores, pullSync, refreshAccount, useStore } from './store';
 import { AuthScreen, Onboarding } from './screens/Welcome';
 import { haptic } from './fx/haptics';
 import type { Product } from './types';
@@ -42,7 +42,8 @@ export function App() {
   useTheme();
 
   useEffect(() => {
-    loadCatalog();
+    loadCatalog().then(loadBasketCatalogs);
+    loadStores();
     pullSync();
     refreshAccount();
     const a = setInterval(checkCatalogUpdate, CATALOG_POLL_MS);

@@ -3,6 +3,7 @@ import { BarChart3, ChefHat, Clock3, Search, Settings, ShoppingBasket, SlidersHo
 import { freshnessLabel, units } from '../lib';
 import { href, navigate, type Route } from '../router';
 import { useStore } from '../store';
+import { StoreButton } from './Stores';
 import { haptic } from '../fx/haptics';
 
 export function TopBar() {
@@ -16,7 +17,18 @@ export function TopBar() {
           <span className="tagline">Tu súper, en un clic</span>
         </span>
       </a>
-      {updatedAt && <span className="stamp num"><span className="pulse" />{freshnessLabel(updatedAt)}<Clock3 size={15} strokeWidth={2.4} /></span>}
+      <div className="topbar-end">
+        <StoreButton />
+        {updatedAt && (
+          <span className="stamp num" title={freshnessLabel(updatedAt)}>
+            <span className="pulse" />
+            <span className="long">{freshnessLabel(updatedAt)}</span>
+            {/* En móviles estrechos solo cabe la hora (o el día) */}
+            <span className="short">{freshnessLabel(updatedAt).split('·').pop()!.trim()}</span>
+            <Clock3 size={15} strokeWidth={2.4} />
+          </span>
+        )}
+      </div>
     </header>
   );
 }

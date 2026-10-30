@@ -5,7 +5,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { db, getMeta } from './db.js';
 import { getCatalog, getPriceHistory } from './catalog.js';
-import { isScraping, scheduleScraping, scrapeCatalog } from './scraper.js';
+import { isScraping, scheduleScraping, scrapeAll, scrapeCatalog } from './scraper.js';
+import { cheaperElsewhere, compareProduct } from './compare.js';
+import { isStore, metaKey, storeParam, STORES } from './stores.js';
 import { createPlan, getPlan, plannerOptions, PlannerError, swapRecipe } from './planner.js';
 import {
   checkPassword, cleanName, CODE_RE, createUser, findByEmail, hashPassword, normalizeEmail, PASSWORD_MAX, PASSWORD_MIN,
@@ -31,16 +33,26 @@ app.use('/api', (req, res, next) => {
 });
 
 app.get('/api/health', (_req, res) => {
-  res.json({ ok: true, catalogUpdatedAt: getMeta('catalog_updated_at'), scraping: isScraping() });
+  res.json({ ok: true, catalogUpdatedAt: getMeta('catalog_updated_at'), scraping: isScraping(), stores: Object.fromEntries(STORES.map((s) => [s.id, getMeta(metaKey(s.id, 'catalog_updated_at'))])) });
+});
+
+// Súper disponibles, con cuántos productos tiene cada uno y cuándo se actualizó
+app.get('/api/stores', (_req, res) => {
+  res.set('Cache-Control', 'no-cache').json(STORES.map((s) => {
+    const m = getCatalog(s.id).meta;
+    return { id: s.id, name: s.name, hue: s.hue, count: m.count, updatedAt: m.updatedAt };
+  }).filter((s) => s.count > 0));
 });
 
 // Metadatos ligeros: los clientes los consultan para saber si tienen que bajar el catálogo.
-app.get('/api/catalog/meta', (_req, res) => {
-  res.set('Cache-Control', 'no-cache').json({ ...getCatalog().meta, scraping: isScraping() });
+// Sin ?store es Mercadona, como siempre (apps antiguas).
+app.get('/api/catalog/meta', (req, res) => {
+  const store = storeParam(req.query.store);
+  res.set('Cache-Control', 'no-cache').json({ ...getCatalog(store).meta, scraping: isScraping(store) });
 });
 
 app.get('/api/catalog', (req, res) => {
-  const c = getCatalog();
+  const c = getCatalog(storeParam(req.query.store));
   res.set({ ETag: c.etag, 'Cache-Control': 'no-cache', Vary: 'Accept-Encoding', 'Content-Type': 'application/json; charset=utf-8' });
   if (req.headers['if-none-match'] === c.etag) return res.sendStatus(304);
   if (/\bgzip\b/.test(req.headers['accept-encoding'] ?? '')) {
@@ -48,6 +60,19 @@ app.get('/api/catalog', (req, res) => {
   } else {
     res.send(c.json);
   }
+});
+
+// El mismo producto (o uno parecido) en los demás súper
+app.get('/api/products/:id/compare', (req, res) => {
+  const c = compareProduct(req.params.id);
+  if (!c) return res.status(404).json({ error: 'Producto no encontrado' });
+  res.json(c);
+});
+
+// Para la cesta: qué productos salen más baratos en otro súper
+app.post('/api/compare', (req, res) => {
+  const ids = Array.isArray(req.body?.ids) ? req.body.ids.filter((x) => typeof x === 'string').slice(0, 300) : [];
+  res.json(cheaperElsewhere(ids));
 });
 
 app.get('/api/products/:id/history', (req, res) => {
@@ -114,7 +139,7 @@ app.post('/api/auth/register', registerLimit, async (req, res) => {
   if (findByEmail(email)) return res.status(409).json({ error: 'Ya hay una cuenta con ese email. Entra con ella.' });
   const listCode = typeof req.body?.listCode === 'string' ? req.body.listCode.toUpperCase() : null;
   try {
-    const u = createUser({ id: req.body?.memberId, name, email, passwordHash: await hashPassword(password), listCode: listExists(listCode) ? listCode : null });
+    const u = createUser({ id: req.body?.memberId, name, email, passwordHash: await hashPassword(password), listCode: listExists(listCode) ? listCode : null, store: isStore(req.body?.store) ? req.body.store : null });
     session(res, u, 201);
   } catch (e) {
     if (String(e?.message).includes('UNIQUE')) return res.status(409).json({ error: 'Ya hay una cuenta con ese email. Entra con ella.' });
@@ -133,7 +158,7 @@ app.post('/api/auth/login', authLimit, async (req, res) => {
 
 app.get('/api/me', requireAuth, (req, res) => res.json(toUser(req.user)));
 
-/** Cambiar el nombre o la lista a la que apunta la cuenta (al crear o unirse a una lista compartida). */
+/** Cambiar el nombre, el súper preferido o la lista a la que apunta la cuenta (al crear o unirse a una lista compartida). */
 app.put('/api/me', requireAuth, (req, res) => {
   const name = req.body?.name === undefined ? req.user.name : cleanName(req.body.name);
   if (!name) return res.status(400).json({ error: 'Dinos cómo te llamas.' });
@@ -143,8 +168,10 @@ app.put('/api/me', requireAuth, (req, res) => {
     if (next !== null && !listExists(next)) return res.status(400).json({ error: 'Esa lista no existe.' });
     code = next;
   }
-  db.prepare('UPDATE users SET name = ?, list_code = ? WHERE id = ?').run(name, code, req.user.id);
-  res.json(toUser({ ...req.user, name, list_code: code }));
+  if (req.body?.store !== undefined && req.body.store !== null && !isStore(req.body.store)) return res.status(400).json({ error: 'Ese súper no está disponible.' });
+  const store = req.body?.store === undefined ? req.user.store : req.body.store;
+  db.prepare('UPDATE users SET name = ?, list_code = ?, store = ? WHERE id = ?').run(name, code, store, req.user.id);
+  res.json(toUser({ ...req.user, name, list_code: code, store }));
 });
 
 app.put('/api/me/password', requireAuth, authLimit, async (req, res) => {
@@ -187,7 +214,7 @@ function planLimited(ip, max = 8, key = 'plan') {
 app.post('/api/plans', async (req, res) => {
   if (planLimited(req.ip)) return res.status(429).json({ error: 'Has creado muchos planes seguidos. Prueba dentro de un rato.' });
   try {
-    res.status(201).json(await createPlan(req.body?.prefs ?? {}, getMeta('catalog_version') ?? '0', req.body?.avoid));
+    res.status(201).json(await createPlan(req.body?.prefs ?? {}, req.body?.avoid));
   } catch (e) {
     planFailed(res, e);
   }
@@ -198,7 +225,7 @@ app.post('/api/plans/:id/swap', async (req, res) => {
   if (!/^[\w-]{6,20}$/.test(req.params.id)) return res.status(404).json({ error: 'Plan no encontrado' });
   if (planLimited(req.ip, 30, 'swap')) return res.status(429).json({ error: 'Has cambiado muchas recetas seguidas. Prueba dentro de un rato.' });
   try {
-    res.status(201).json(await swapRecipe(req.params.id, Number(req.body?.index), getMeta('catalog_version') ?? '0'));
+    res.status(201).json(await swapRecipe(req.params.id, Number(req.body?.index)));
   } catch (e) {
     planFailed(res, e);
   }
@@ -218,8 +245,10 @@ app.get('/api/plans/:id', (req, res) => {
 
 app.post('/api/admin/refresh', (req, res) => {
   if (!ADMIN_TOKEN || req.headers.authorization !== `Bearer ${ADMIN_TOKEN}`) return res.sendStatus(401);
-  if (isScraping()) return res.status(202).json({ status: 'ya en marcha' });
-  scrapeCatalog().catch((e) => console.error('[scraper] Error:', e.message));
+  // ?store=consum actualiza solo ese súper; sin él, todos
+  const store = isStore(req.query.store) ? req.query.store : null;
+  if (isScraping(store ?? undefined)) return res.status(202).json({ status: 'ya en marcha' });
+  (store ? scrapeCatalog(store) : scrapeAll()).catch((e) => console.error('[scraper] Error:', e.message));
   res.status(202).json({ status: 'iniciado' });
 });
 

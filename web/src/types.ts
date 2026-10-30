@@ -29,6 +29,8 @@ export interface Section {
 
 export interface Product {
   id: string;
+  /** Súper del producto. Los catálogos guardados antes de haber varios súper no lo traen. */
+  store?: string;
   name: string;
   size: string;
   section: string;
@@ -47,6 +49,8 @@ export interface Product {
 
 export interface Catalog {
   version: string;
+  store?: string;
+  storeName?: string;
   updatedAt: string | null;
   warehouse: string | null;
   count: number;
@@ -202,6 +206,43 @@ export interface PlannerOptions {
   stores: { id: string; label: string }[];
 }
 
+// ───────────── Súper y comparador ─────────────
+
+export interface StoreInfo {
+  id: string;
+  name: string;
+  hue: string;
+  count: number;
+  updatedAt: string | null;
+}
+
+export interface ComparedProduct {
+  id: string;
+  store: string;
+  name: string;
+  size: string;
+  price: number;
+  refPrice: number | null;
+  refFormat: string | null;
+  image: string | null;
+}
+
+/** "same": mismo código de barras. "similar": mismo pasillo, nombre y formato parecidos. */
+export interface StoreMatch {
+  store: string;
+  match: 'same' | 'similar';
+  product: ComparedProduct;
+  alternatives: ComparedProduct[];
+}
+
+export interface Comparison {
+  id: string;
+  store: string;
+  matches: StoreMatch[];
+}
+
+export type Cheaper = Record<string, StoreMatch & { saving: number }>;
+
 // ───────────── Cuentas ─────────────
 
 export interface User {
@@ -209,6 +250,8 @@ export interface User {
   name: string;
   email: string;
   listCode: string | null;
+  /** Súper preferido: el que se ve al entrar. */
+  store?: string | null;
   createdAt: string;
 }
 

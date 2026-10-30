@@ -2,7 +2,7 @@
 
 # 🛒 ListPro 2.0
 
-**La lista de la compra con los precios de Mercadona actualizados cada día**
+**La lista de la compra con los precios de Mercadona y Consum actualizados cada día**
 
 *Un producto de [Xyon Platforms](https://github.com/mkandreum)*
 
@@ -20,20 +20,30 @@ ListPro 2.0 son tres piezas conectadas que comparten catálogo, categorías y ce
 
 ## Cómo funciona
 
-1. **Scraper diario** (`server/src/scraper.js`): recorre la API pública de `tienda.mercadona.es` (26 categorías → ~150 subcategorías → grupos), guarda ~4.300 productos en SQLite con precio, €/kg, foto y enlace, y registra un **histórico de cambios de precio**. Se ejecuta al arrancar si el catálogo tiene más de 20 h y cada día a las `SCRAPE_HOUR` (hora de Madrid). Si una pasada trae un catálogo anómalo (menos de 500 productos o una caída del 40 %), no machaca el bueno.
-2. **Categorías mejoradas** (`server/src/taxonomy.js`): se agrupan por ID (no por palabras clave, que fallaban: "sal" casaba con "salsas") en 9 pasillos de compra, cada uno con su color, y cada categoría lleva fotos reales de sus productos.
-3. **API** (`server/src/index.js`):
-   - `GET /api/catalog` — catálogo completo comprimido (~260 KB gzip) con ETag.
-   - `GET /api/catalog/meta` — versión, para saber si hay precios nuevos.
+1. **Scraper diario** (`server/src/scraper.js` + un lector por súper en `server/src/scrapers/`):
+   - **Mercadona** (`tienda.mercadona.es`): 26 categorías → ~150 subcategorías → grupos, ~4.300 productos. Como su listado no trae el código de barras, cada pasada pide la ficha de hasta `EAN_PER_RUN` productos (1.500 por defecto, los nuevos primero) para poder compararlos.
+   - **Consum** (`tienda.consum.es`): ~9.200 productos con código de barras, 93 páginas por pasada.
+   - Guarda precio, €/kg, precio tachado de oferta, foto y enlace, y un **histórico de cambios de precio**. Se ejecuta al arrancar si algún catálogo tiene más de 20 h y cada día a las `SCRAPE_HOUR` (hora de Madrid), un súper detrás de otro. Si una pasada trae un catálogo anómalo (muy pocos productos o una caída del 40 %), no machaca el bueno.
+   - Los productos de Mercadona conservan sus ids (`27348`); los de Consum llevan prefijo (`c:4667`) y sus categorías un desplazamiento, así nada choca y las cestas y apps antiguas siguen valiendo.
+   - Carrefour, Alcampo y Lidl se probaron en octubre de 2026: los dos primeros protegen su tienda online contra bots y Lidl solo publica online unas pocas ofertas. Añadir otro súper es escribir su lector y darlo de alta en `server/src/stores.js`.
+2. **Categorías mejoradas** (`server/src/taxonomy.js`): se agrupan por ID (no por palabras clave, que fallaban: "sal" casaba con "salsas") en 9 pasillos de compra, cada uno con su color, y cada categoría lleva fotos reales de sus productos. Las de Consum se colocan en los mismos 9 pasillos.
+3. **Comparador** (`server/src/compare.js`): para cada producto, su equivalente en los otros súper. «Mismo producto» si coincide el código de barras; si no, «parecido»: mismo pasillo, mismo tipo de producto (la primera palabra del nombre, en los dos sentidos) y de la misma clase (la que la sigue: aceite de *coco* no es aceite de *oliva*), palabras pesadas por lo raras que son, marca y formato. Se compara por precio por kilo o litro.
+4. **API** (`server/src/index.js`):
+   - `GET /api/stores` — súper disponibles, con cuántos productos tiene cada uno.
+   - `GET /api/catalog?store=consum` — catálogo completo de un súper comprimido (~260 KB gzip Mercadona, ~530 KB Consum) con ETag. Sin `store`, Mercadona.
+   - `GET /api/catalog/meta?store=` — versión, para saber si hay precios nuevos.
+   - `GET /api/products/:id/compare` — el mismo producto o uno parecido en los otros súper.
+   - `POST /api/compare` `{ ids }` — para la cesta: qué productos salen más baratos en otro súper.
    - `GET /api/products/:id/history` — historial de precio.
    - `POST/GET/PUT /api/lists/:code` — lista compartida por código de 8 caracteres (web ↔ Android ↔ familia).
    - `GET /api/planner/options`, `POST /api/plans`, `GET /api/plans/:id`, `POST /api/plans/:id/swap` — planes de recetas con IA (Gemini) sobre el catálogo real, y cambiar una receta suelta.
-   - `POST /api/admin/refresh` — fuerza una actualización (`Authorization: Bearer $ADMIN_TOKEN`).
-4. **Web y Android** consumen la misma API: pasillos a color, bajadas de precio, búsqueda, cesta ordenada por pasillos con casillas "en el carro", aviso si un precio cambió desde que lo añadiste, cestas guardadas, gastos y sincronización. Android además comparte la lista **por NFC** acercando dos móviles y refresca los precios en segundo plano.
+   - `POST /api/admin/refresh[?store=consum]` — fuerza una actualización de todos o de uno (`Authorization: Bearer $ADMIN_TOKEN`).
+5. **Varios súper en web y Android**: el botón «Cambiar súper» de la cabecera cambia todos los productos de la app; al registrarse se elige el súper preferido (se guarda en la cuenta). En cada ficha hay un bloque «En otros súper» con su precio y un + para añadirlo a la cesta de ese súper. La cesta tiene una pestaña por súper en la misma píldora deslizable de Recetas, con su subtotal, un aviso de lo que sale más barato en otro súper (con «Mover») y la compra se termina por súper.
+6. **Web y Android** consumen la misma API: pasillos a color, bajadas de precio, búsqueda, cesta ordenada por pasillos con casillas "en el carro", aviso si un precio cambió desde que lo añadiste, cestas guardadas, gastos y sincronización. Android además comparte la lista **por NFC** acercando dos móviles y refresca los precios en segundo plano.
 
 ## Recetas con IA (pestaña Recetas)
 
-El usuario elige qué planificar (**desayunos, comidas, meriendas y/o cenas**), cuántos días y personas, presupuesto semanal (la app sugiere uno según lo elegido), súper (por ahora Mercadona), dieta, alergias, gustos, lo que ya tiene en casa, tiempo máximo y electrodomésticos. En web y Android el plan se consulta por secciones desde una barra en píldora que se desliza con el dedo (una página por comida y otra con la lista de la compra).
+El usuario elige qué planificar (**desayunos, comidas, meriendas y/o cenas**), cuántos días y personas, presupuesto semanal (la app sugiere uno según lo elegido), súper (Mercadona o Consum), dieta, alergias, gustos, lo que ya tiene en casa, tiempo máximo y electrodomésticos. En web y Android el plan se consulta por secciones desde una barra en píldora que se desliza con el dedo (una página por comida y otra con la lista de la compra).
 
 Cómo lo monta el servidor (`server/src/planner.js`):
 
@@ -60,15 +70,15 @@ La app Android se compila desde [listproapp](https://github.com/mkandreum/listpr
 ## Desplegar en Coolify
 
 1. En Coolify, crea un recurso nuevo: *Private Repository (GitHub App)* → `mkandreum/listpro`, rama `main`, Build Pack **Docker Compose** (`docker-compose.yaml`).
-2. Variables de entorno: `GEMINI_API_KEY` (la de Puchero/VoltBody; sin ella la pestaña Recetas avisa de que no está disponible) y, opcionales, `GEMINI_MODEL_PLAN`, `GEMINI_MODEL_FAST`, `MERCADONA_WH` (por defecto `mad1`), `SCRAPE_HOUR` (por defecto `6`) y `ADMIN_TOKEN`.
+2. Variables de entorno: `GEMINI_API_KEY` (la de Puchero/VoltBody; sin ella la pestaña Recetas avisa de que no está disponible) y, opcionales, `GEMINI_MODEL_PLAN`, `GEMINI_MODEL_FAST`, `MERCADONA_WH` (por defecto `mad1`), `SCRAPE_HOUR` (por defecto `6`), `EAN_PER_RUN` (por defecto `1500`) y `ADMIN_TOKEN`.
 3. Asigna el dominio `listpro.xyoncloud.win` al servicio `app`, puerto **3000**.
-4. Lanza **Deploy**. Al arrancar con la base de datos vacía descarga el catálogo (~1,5 min); después se actualiza cada mañana. La base de datos vive en el volumen `listpro_data` y sobrevive a los redespliegues.
+4. Lanza **Deploy**. Al arrancar descarga los catálogos que falten (Mercadona ~1,5 min, Consum ~1 min); después se actualizan cada mañana. La base de datos vive en el volumen `listpro_data` y sobrevive a los redespliegues.
 
 Con el recurso creado y *Auto Deploy* activo, cada push a `main` se redespliega solo.
 
 En local: `docker compose up -d --build`.
 
-> ListPro no está afiliada a Mercadona. Los precios se leen de su tienda online pública una vez al día.
+> ListPro no está afiliada a ningún súper. Los precios se leen de sus tiendas online públicas una vez al día.
 
 ## 🏢 Xyon Platforms
 

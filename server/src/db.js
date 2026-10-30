@@ -70,6 +70,24 @@ db.exec(`
   );
 `);
 
+// Migraciones aditivas: columnas nuevas con valor por defecto, para que una base de datos vieja siga valiendo.
+function addColumn(table, column, def) {
+  const has = db.prepare(`PRAGMA table_info(${table})`).all().some((c) => c.name === column);
+  if (!has) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${def}`);
+}
+// Varios súper: lo que ya había es de Mercadona
+addColumn('categories', 'store', "TEXT NOT NULL DEFAULT 'mercadona'");
+// Pasillo de ListPro de las categorías de otros súper (las de Mercadona salen de taxonomy.js)
+addColumn('categories', 'section', 'TEXT');
+addColumn('products', 'store', "TEXT NOT NULL DEFAULT 'mercadona'");
+addColumn('products', 'ean', 'TEXT');
+addColumn('products', 'brand', 'TEXT');
+addColumn('users', 'store', 'TEXT');
+db.exec(`
+  CREATE INDEX IF NOT EXISTS products_store ON products(store, active);
+  CREATE INDEX IF NOT EXISTS products_ean ON products(ean);
+`);
+
 export function getMeta(key) {
   return db.prepare('SELECT value FROM meta WHERE key = ?').get(key)?.value ?? null;
 }

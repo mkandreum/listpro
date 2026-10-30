@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { ArrowDown, ArrowRight, Check, ChefHat, Eye, EyeOff, ShoppingBasket, Sparkles, Users } from 'lucide-react';
 import { money } from '../lib';
-import { continueAsGuest, finishOnboarding, getState, login, register, useStore } from '../store';
+import { continueAsGuest, finishOnboarding, getState, login, register, setStore, useStore } from '../store';
+import { StoreChoice } from '../components/Stores';
 import { haptic } from '../fx/haptics';
 
 /** Fotos de producto reales del catálogo para decorar (las que más han bajado, si las hay). */
@@ -168,6 +169,8 @@ export function AuthScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [show, setShow] = useState(false);
+  // Súper preferido: el que verá nada más terminar el registro
+  const [store, setStoreChoice] = useState(() => getState().store);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [shake, setShake] = useState(0);
@@ -181,7 +184,7 @@ export function AuthScreen() {
     setBusy(true);
     setError(null);
     try {
-      if (isNew) await register(name.trim(), email, password);
+      if (isNew) await register(name.trim(), email, password, store);
       else await login(email, password);
       haptic.success();
     } catch (err) {
@@ -237,13 +240,20 @@ export function AuthScreen() {
             </span>
             {isNew && <PasswordMeter value={password} />}
           </label>
+          {isNew && (
+            <div className="text-field">
+              Tu súper
+              <span className="muted small" style={{ fontWeight: 500 }}>Es el que verás al entrar. Lo puedes cambiar cuando quieras desde arriba.</span>
+              <StoreChoice value={store} onChange={setStoreChoice} />
+            </div>
+          )}
           {error && <p className="auth-error" role="alert">{error}</p>}
           <button className="btn primary block cta" disabled={busy || !ready}>
             {busy ? (isNew ? 'Preparando tu cesta…' : 'Entrando…') : isNew ? 'Crear cuenta' : 'Entrar'}
             {!busy && <ArrowRight size={20} />}
           </button>
         </form>
-        <button className="link-btn guest" onClick={() => { haptic.tick(); continueAsGuest(); }}>Seguir sin cuenta</button>
+        <button className="link-btn guest" onClick={() => { haptic.tick(); if (isNew) setStore(store, false); continueAsGuest(); }}>Seguir sin cuenta</button>
         <p className="muted small center-text">Solo guardamos tu nombre, tu email y tu lista. Puedes borrar la cuenta cuando quieras desde Ajustes.</p>
       </section>
     </div>

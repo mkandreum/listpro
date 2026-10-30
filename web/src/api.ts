@@ -1,4 +1,4 @@
-import type { Catalog, ListData, MealPlan, PlanPrefs, PlannerOptions, PriceHistory, Session, User } from './types';
+import type { Catalog, Cheaper, Comparison, ListData, MealPlan, PlanPrefs, PlannerOptions, PriceHistory, Session, StoreInfo, User } from './types';
 
 const BASE = import.meta.env.VITE_API_BASE ?? '';
 
@@ -22,17 +22,20 @@ async function friendly<T>(res: Response): Promise<T> {
 }
 
 export const api = {
-  register: (b: { name: string; email: string; password: string; memberId?: string | null; listCode?: string | null }) =>
+  register: (b: { name: string; email: string; password: string; memberId?: string | null; listCode?: string | null; store?: string }) =>
     send('POST', '/api/auth/register', b).then((r) => friendly<Session>(r)),
   login: (email: string, password: string) => send('POST', '/api/auth/login', { email, password }).then((r) => friendly<Session>(r)),
   me: (token: string) => send('GET', '/api/me', undefined, token).then((r) => friendly<User>(r)),
-  updateMe: (token: string, patch: { name?: string; listCode?: string | null }) => send('PUT', '/api/me', patch, token).then((r) => friendly<User>(r)),
+  updateMe: (token: string, patch: { name?: string; listCode?: string | null; store?: string }) => send('PUT', '/api/me', patch, token).then((r) => friendly<User>(r)),
   changePassword: (token: string, current: string, next: string) =>
     send('PUT', '/api/me/password', { current, next }, token).then((r) => friendly<Session>(r)),
   logoutAll: (token: string) => send('POST', '/api/auth/logout-all', {}, token).then((r) => friendly<Session>(r)),
   deleteAccount: (token: string, password: string) => send('DELETE', '/api/me', { password }, token).then((r) => friendly<void>(r)),
   catalog: () => fetch(`${BASE}/api/catalog`, { cache: 'no-cache' }).then((r) => json<Catalog>(r)),
-  catalogMeta: () => fetch(`${BASE}/api/catalog/meta`, { cache: 'no-store' }).then((r) => json<{ version: string; updatedAt: string }>(r)),
+  catalogMeta: (store = 'mercadona') => fetch(`${BASE}/api/catalog/meta?store=${encodeURIComponent(store)}`, { cache: 'no-store' }).then((r) => json<{ version: string; updatedAt: string }>(r)),
+  stores: () => fetch(`${BASE}/api/stores`, { cache: 'no-cache' }).then((r) => json<StoreInfo[]>(r)),
+  compare: (id: string) => fetch(`${BASE}/api/products/${encodeURIComponent(id)}/compare`).then((r) => json<Comparison>(r)),
+  cheaper: (ids: string[]) => send('POST', '/api/compare', { ids }).then((r) => json<Cheaper>(r)),
   history: (id: string) => fetch(`${BASE}/api/products/${encodeURIComponent(id)}/history`).then((r) => json<PriceHistory>(r)),
   plannerOptions: () => fetch(`${BASE}/api/planner/options`).then((r) => json<PlannerOptions>(r)),
   createPlan: (prefs: PlanPrefs, avoid: string[] = []) => send('POST', '/api/plans', { prefs, avoid }).then((r) => friendly<MealPlan>(r)),

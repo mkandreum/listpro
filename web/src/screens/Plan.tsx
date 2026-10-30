@@ -1,4 +1,4 @@
-import { Children, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle, Apple, Check, ChefHat, Clock3, Coffee, Flame, Minus, Moon, Plus, RefreshCw, ShoppingBasket, SlidersHorizontal,
   Soup, Sparkles, Store, Trash2, Wallet,
@@ -6,10 +6,12 @@ import {
 import { api } from '../api';
 import { money } from '../lib';
 import { href, navigate } from '../router';
-import { addPlanToBasket, clearPlan, generatePlan, swapRecipe, toast, useStore } from '../store';
+import { addPlanToBasket, clearPlan, generatePlan, getState, loadCatalog, storeInfo, swapRecipe, toast, useStore } from '../store';
+import { StoreChoice } from '../components/Stores';
 import type { MealPlan, MealType, PlanPrefs, PlanRecipe, PlannerOptions } from '../types';
 import { haptic } from '../fx/haptics';
-import { reducedMotion, useTweened } from '../fx/motion';
+import { useTweened } from '../fx/motion';
+import { Pager, type PillItem } from '../components/Pills';
 import { Price } from '../components/ProductTag';
 
 export const DEFAULT_PREFS: PlanPrefs = {
@@ -39,7 +41,7 @@ const LOADING = ['Mirando los precios de hoy…', 'Repartiendo la semana…', 'C
 /** Los planes de antes de las recetas solo tenían cenas y `nights`. */
 const mealOf = (r: PlanRecipe): MealType => r.meal ?? 'cena';
 const withDefaults = (p: Partial<PlanPrefs> | null | undefined): PlanPrefs => ({
-  ...DEFAULT_PREFS, ...p, days: p?.days ?? p?.nights ?? DEFAULT_PREFS.days, meals: p?.meals?.length ? p.meals : ['cena'],
+  ...DEFAULT_PREFS, store: getState().store, ...p, days: p?.days ?? p?.nights ?? DEFAULT_PREFS.days, meals: p?.meals?.length ? p.meals : ['cena'],
 });
 const round5 = (n: number) => Math.max(15, Math.round(n / 5) * 5);
 export const suggestedBudget = (p: PlanPrefs) => round5(p.meals.reduce((a, m) => a + MEALS[m].perServing, 0) * p.people * p.days * 1.15);
@@ -166,12 +168,8 @@ function PrefsForm({ initial, options, error, onSubmit, onCancel }: {
 
       <section className="panel">
         <div className="field-head"><Store size={20} /><h2 className="h-block">Tu súper</h2></div>
-        <div className="chips wrap">
-          {(options?.stores ?? [{ id: 'mercadona', label: 'Mercadona' }]).map((s) => (
-            <button type="button" key={s.id} className="chip text-only" aria-pressed={p.store === s.id} onClick={() => up('store', s.id)}>{s.label}</button>
-          ))}
-        </div>
-        <p className="muted small">Por ahora trabajamos con el catálogo de Mercadona.</p>
+        <StoreChoice value={p.store} onChange={(id) => up('store', id)} />
+        <p className="muted small" style={{ marginTop: 8 }}>Las recetas se hacen con los productos y precios de hoy de {storeInfo(p.store).name}.</p>
       </section>
 
       <section className="panel">
@@ -259,15 +257,19 @@ function Cooking({ meals }: { meals: MealType[] }) {
 
 // ───────────── Plan ─────────────
 
-type Tab = MealType | 'compra';
-
 function PlanView({ plan, openMeal, onRedo, onEdit }: { plan: MealPlan; openMeal?: MealType; onRedo: () => void; onEdit: () => void }) {
   const idx = useStore((s) => s.idx);
   const t = plan.totals;
+  // El plan puede ser de otro súper: su catálogo hace falta para meter la compra en la cesta
+  const planStore = plan.prefs.store ?? 'mercadona';
+  useEffect(() => { if (!getState().catalogs[planStore]) loadCatalog(planStore); }, [planStore]);
   const pct = Math.min(100, (t.shopping / t.budget) * 100);
   const shopping = useMemo(() => plan.shopping.filter((s) => idx.products.size === 0 || idx.products.has(s.productId)), [plan, idx]);
   const meals = useMemo(() => MEAL_ORDER.filter((m) => plan.recipes.some((r) => mealOf(r) === m)), [plan]);
-  const tabs: Tab[] = [...meals, 'compra'];
+  const tabs: PillItem[] = [
+    ...meals.map((m) => ({ key: m, label: MEALS[m].label, icon: MEALS[m].icon, hue: MEALS[m].hue })),
+    { key: 'compra', label: 'Compra', icon: ShoppingBasket, hue: '#16A34A' },
+  ];
   const multi = meals.length > 1;
 
   return (
@@ -299,101 +301,10 @@ function PlanView({ plan, openMeal, onRedo, onEdit }: { plan: MealPlan; openMeal
 
       {plan.warnings.map((w) => <div key={w} className="notice up"><AlertTriangle size={20} /><span>{w}</span></div>)}
 
-      <Pager tabs={tabs} initial={openMeal}>
+      <Pager tabs={tabs} initial={openMeal} label="Secciones del plan">
         {meals.map((m) => <MealPage key={m} plan={plan} meal={m} />)}
         <ShoppingPage plan={plan} shopping={shopping} />
       </Pager>
-    </>
-  );
-}
-
-/**
- * Píldora de secciones + páginas que se deslizan con el dedo (scroll-snap). El indicador sigue al
- * dedo en tiempo real y la altura se ajusta a la página visible para no dejar huecos.
- */
-function Pager({ tabs, initial, children }: { tabs: Tab[]; initial?: Tab; children: React.ReactNode }) {
-  const pages = Children.toArray(children);
-  const track = useRef<HTMLDivElement>(null);
-  const bar = useRef<HTMLDivElement>(null);
-  const [active, setActive] = useState(() => Math.max(0, initial ? tabs.indexOf(initial) : 0));
-  const [height, setHeight] = useState<number | undefined>();
-  const key = tabs.join();
-
-  // Al volver de una receta o cambiar de plan, nos colocamos sin animación
-  useLayoutEffect(() => {
-    const el = track.current;
-    if (!el) return;
-    const i = Math.min(active, tabs.length - 1);
-    el.scrollLeft = i * el.clientWidth;
-    bar.current?.style.setProperty('--p', String(i));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key]);
-
-  useEffect(() => {
-    const el = track.current;
-    if (!el) return;
-    let raf = 0;
-    const onScroll = () => {
-      cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(() => {
-        const p = el.scrollLeft / Math.max(1, el.clientWidth);
-        bar.current?.style.setProperty('--p', p.toFixed(3));
-        const i = Math.round(p);
-        setActive((a) => (a === i ? a : (haptic.tick(), i)));
-      });
-    };
-    el.addEventListener('scroll', onScroll, { passive: true });
-    return () => { el.removeEventListener('scroll', onScroll); cancelAnimationFrame(raf); };
-  }, []);
-
-  // La altura sigue a la página activa (también cuando crece, p. ej. al cargar imágenes)
-  useEffect(() => {
-    const page = track.current?.children[active] as HTMLElement | undefined;
-    if (!page) return;
-    const ro = new ResizeObserver(() => setHeight(page.offsetHeight));
-    ro.observe(page);
-    return () => ro.disconnect();
-  }, [active, key]);
-
-  const go = useCallback((i: number) => {
-    const el = track.current;
-    if (!el) return;
-    haptic.tap();
-    el.scrollTo({ left: i * el.clientWidth, behavior: reducedMotion() ? 'auto' : 'smooth' });
-    const top = (bar.current?.getBoundingClientRect().top ?? 0) + scrollY - 12;
-    if (scrollY > top) window.scrollTo({ top, behavior: reducedMotion() ? 'auto' : 'smooth' });
-  }, []);
-
-  return (
-    <>
-      <div ref={bar} className="pill-tabs glass" role="tablist" aria-label="Secciones del plan" style={{ '--n': tabs.length, '--active': tabs[active] === 'compra' ? '#16A34A' : MEALS[tabs[active] as MealType].hue } as React.CSSProperties}>
-        <span className="pill-tabs-ind" aria-hidden />
-        {tabs.map((t, i) => {
-          const M = t === 'compra' ? null : MEALS[t];
-          const Icon = M?.icon ?? ShoppingBasket;
-          return (
-            <button key={t} role="tab" id={`tab-${t}`} aria-controls={`page-${t}`} aria-selected={i === active} tabIndex={i === active ? 0 : -1}
-              style={{ '--meal': M?.hue ?? 'var(--green)' } as React.CSSProperties} onClick={() => go(i)}
-              onKeyDown={(e) => {
-                if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
-                  const n = (i + (e.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
-                  go(n);
-                  (e.currentTarget.parentElement?.children[n + 1] as HTMLElement | undefined)?.focus();
-                }
-              }}>
-              <Icon size={19} strokeWidth={2.3} aria-hidden />
-              <span>{M?.label ?? 'Compra'}</span>
-            </button>
-          );
-        })}
-      </div>
-      <div ref={track} className="pager" style={{ height }}>
-        {pages.map((c, i) => (
-          <div key={tabs[i]} className="pager-page" role="tabpanel" id={`page-${tabs[i]}`} aria-labelledby={`tab-${tabs[i]}`} aria-hidden={i !== active} {...(i !== active ? { inert: '' } : {})}>
-            {c}
-          </div>
-        ))}
-      </div>
     </>
   );
 }

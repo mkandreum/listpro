@@ -2,6 +2,7 @@ import { useRef } from 'react';
 import { useState as useLocalState } from 'react';
 import { ChevronRight, Download, KeyRound, LogOut, MonitorSmartphone, Pencil, RefreshCw, Trash2, Upload, UserRound, Users } from 'lucide-react';
 import { Avatar } from '../components/Share';
+import { StoreDot, StoreName, StoreSheet } from '../components/Stores';
 import { href } from '../router';
 import {
   changePassword, checkCatalogUpdate, deleteAccount, exportBackup, importBackup, logout, logoutEverywhere, renameAccount, setTheme, toast, useStore, wantAccount,
@@ -12,6 +13,8 @@ import { haptic } from '../fx/haptics';
 export function Settings() {
   const sync = useStore((s) => s.sync);
   const catalog = useStore((s) => s.catalog);
+  const store = useStore((s) => s.store);
+  const [picking, setPicking] = useLocalState(false);
   const theme = useStore((s) => s.theme);
   const members = useStore((s) => s.members);
   const file = useRef<HTMLInputElement>(null);
@@ -46,15 +49,19 @@ export function Settings() {
       <section className="panel" aria-labelledby="h-cat">
         <h2 className="h-block" id="h-cat">Catálogo</h2>
         <div style={{ marginTop: 8 }}>
+          <div className="kv"><span>Súper</span><StoreName id={store} /></div>
           <div className="kv"><span>Productos</span><b className="num">{catalog?.count.toLocaleString('es-ES') ?? '—'}</b></div>
           <div className="kv"><span>Precios actualizados</span><b className="num">{catalog?.updatedAt ? new Date(catalog.updatedAt).toLocaleString('es-ES', { dateStyle: 'medium', timeStyle: 'short' }) : '—'}</b></div>
-          <div className="kv"><span>Zona de precios</span><b>{catalog?.warehouse === 'mad1' ? 'Madrid' : catalog?.warehouse ?? '—'}</b></div>
+          {catalog?.warehouse && <div className="kv"><span>Zona de precios</span><b>{catalog.warehouse === 'mad1' ? 'Madrid' : catalog.warehouse}</b></div>}
         </div>
-        <p className="muted small" style={{ marginTop: 8 }}>Los precios se descargan cada mañana de la tienda online de Mercadona. ListPro no está afiliada a Mercadona.</p>
+        <p className="muted small" style={{ marginTop: 8 }}>Los precios se descargan cada mañana de las tiendas online de cada súper. ListPro no está afiliada a ningún súper.</p>
         <div className="stack-btns">
+          <button className="btn" onClick={() => setPicking(true)}><StoreDot id={store} size={20} /> Cambiar de súper</button>
           <button className="btn" onClick={() => run(async () => { await checkCatalogUpdate(); }, 'Catálogo al día')}><RefreshCw size={18} /> Comprobar ahora</button>
         </div>
       </section>
+
+      {picking && <StoreSheet onClose={() => setPicking(false)} />}
 
       <section className="panel" aria-labelledby="h-backup">
         <h2 className="h-block" id="h-backup">Copia de seguridad</h2>
