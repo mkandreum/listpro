@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { BarChart3, ChefHat, Search, Settings, ShoppingBasket, SlidersHorizontal, Store, X } from 'lucide-react';
+import { BadgeCheck, BarChart3, ChefHat, Search, Settings, ShoppingBasket, SlidersHorizontal, Store, X } from 'lucide-react';
 import { units } from '../lib';
 import { href, navigate, type Route } from '../router';
 import { useStore } from '../store';
@@ -7,6 +7,7 @@ import { StoreButton } from './Stores';
 import { haptic } from '../fx/haptics';
 
 export function TopBar() {
+  const plan = useStore((s) => s.auth?.user.plan);
   return (
     <header className="topbar">
       <a href="#/" className="brand" aria-label="ListPro, inicio">
@@ -18,6 +19,12 @@ export function TopBar() {
       </a>
       <div className="topbar-end">
         <StoreButton />
+        {plan === 'pro' && (
+          <span className="pro-tick" title="Plan Pro" aria-label="Plan Pro">
+            <BadgeCheck size={17} strokeWidth={2.6} aria-hidden />
+            <span>Pro</span>
+          </span>
+        )}
       </div>
     </header>
   );

@@ -469,8 +469,7 @@ app.get('/api/plans/:id', (req, res) => {
   res.json(plan);
 });
 
-app.post('/api/admin/refresh', (req, res) => {
-  if (!ADMIN_TOKEN || req.headers.authorization !== `Bearer ${ADMIN_TOKEN}`) return res.sendStatus(401);
+app.post('/api/admin/refresh', requireAdmin, (req, res) => {
   // ?store=consum actualiza solo ese súper; sin él, todos
   const store = isStore(req.query.store) ? req.query.store : null;
   if (isScraping(store ?? undefined)) return res.status(202).json({ status: 'ya en marcha' });

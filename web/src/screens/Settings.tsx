@@ -1,5 +1,5 @@
 import { useState as useLocalState } from 'react';
-import { ChevronRight, Copy, KeyRound, LogOut, MonitorSmartphone, Pencil, Trash2, UserRound, Users } from 'lucide-react';
+import { BadgeCheck, ChevronRight, Copy, KeyRound, LogOut, MonitorSmartphone, Pencil, Trash2, UserRound, Users } from 'lucide-react';
 import { Avatar } from '../components/Share';
 import { StoreDot, StoreName, StoreSheet } from '../components/Stores';
 import { href } from '../router';
@@ -114,7 +114,15 @@ function AccountPanel() {
       <div className="account">
         <Avatar m={me ?? { id: user.id, name: user.name, hue: '#22C55E', joinedAt: '' }} size={54} />
         <div className="t">
-          <b id="h-account">{user.name}</b>
+          <b id="h-account">
+            {user.name}
+            {user.plan === 'pro' && (
+              <span className="pro-tick inline" title="Plan Pro">
+                <BadgeCheck size={15} strokeWidth={2.6} aria-hidden />
+                <span>Pro</span>
+              </span>
+            )}
+          </b>
           <span className="muted small">{user.email}</span>
         </div>
         <button className="icon-btn" onClick={() => open('name')} aria-label="Cambiar el nombre"><Pencil size={18} /></button>
