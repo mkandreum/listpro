@@ -50,9 +50,12 @@ export const api = {
       .then((r) => json<{ code: string; updatedAt: string }>(r)),
   getList: (code: string) =>
     fetch(`${BASE}/api/lists/${code}`, { cache: 'no-store' }).then((r) => json<{ code: string; data: ListData; updatedAt: string }>(r)),
-  putList: (code: string, data: ListData, baseUpdatedAt: string | null, force = false) =>
-    fetch(`${BASE}/api/lists/${code}`, {
-      method: 'PUT', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ data, baseUpdatedAt, force }),
-    }),
+  putList: (code: string, data: ListData, baseUpdatedAt: string | null, force = false) => {
+    const body = JSON.stringify({ data, baseUpdatedAt, force });
+    // keepalive: si se está cerrando la pestaña, el navegador termina de enviarlo igual (solo hasta 64 KB)
+    return fetch(`${BASE}/api/lists/${code}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body,
+      keepalive: document.visibilityState === 'hidden' && body.length < 60_000,
+    });
+  },
 };

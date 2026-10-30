@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { WifiOff } from 'lucide-react';
 import { parse, useHash } from './router';
-import { checkCatalogUpdate, loadBasketCatalogs, loadCatalog, loadStores, pullSync, refreshAccount, useStore } from './store';
+import { checkCatalogUpdate, flushSync, loadBasketCatalogs, loadCatalog, loadStores, pullSync, refreshAccount, useStore } from './store';
 import { AuthScreen, Onboarding, ResetPassword } from './screens/Welcome';
 import { haptic } from './fx/haptics';
 import type { Product } from './types';
@@ -57,16 +57,21 @@ export function App() {
   useEffect(() => {
     loadCatalog().then(loadBasketCatalogs);
     loadStores();
-    pullSync();
-    refreshAccount();
+    // Al abrir y al volver: primero la cuenta (por si cambió de lista en otro dispositivo) y luego la cesta;
+    // al irse, se sube lo pendiente para que el otro dispositivo lo vea al abrir
+    const sync = () => refreshAccount().finally(pullSync);
+    sync();
     const a = setInterval(checkCatalogUpdate, CATALOG_POLL_MS);
     const b = setInterval(pullSync, SYNC_POLL_MS);
-    const onVisible = () => { if (document.visibilityState === 'visible') { checkCatalogUpdate(); pullSync(); } };
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') { sync(); checkCatalogUpdate(); } else flushSync();
+    };
     document.addEventListener('visibilitychange', onVisible);
+    addEventListener('pagehide', flushSync);
     // Un toque suave en todo lo que se pulsa y no tiene ya su propia háptica
     const onTap = (e: Event) => { if ((e.target as Element).closest?.('.chip, .stat, .cat-tile, .segmented button, .back, .btn:not(.primary), summary, [role="tab"], .link-btn, .store-btn, .icon-btn, .banner')) haptic.tick(); };
     document.addEventListener('click', onTap, { capture: true });
-    return () => { clearInterval(a); clearInterval(b); document.removeEventListener('visibilitychange', onVisible); document.removeEventListener('click', onTap, { capture: true }); };
+    return () => { clearInterval(a); clearInterval(b); removeEventListener('pagehide', flushSync); document.removeEventListener('visibilitychange', onVisible); document.removeEventListener('click', onTap, { capture: true }); };
   }, []);
 
   useEffect(() => { if (route.name !== 'category') window.scrollTo({ top: 0 }); }, [route.name]);

@@ -564,6 +564,13 @@ export async function pushSync() {
   }
 }
 
+/** Al salir (otra app, cerrar la pestaña, bloquear el móvil): sube ya lo pendiente en vez de esperar. */
+export function flushSync() {
+  if (!state.sync.code || !state.sync.dirty) return;
+  clearTimeout(pushTimer);
+  pushSync();
+}
+
 export async function pullSync() {
   const { code, dirty, updatedAt } = state.sync;
   if (!code || document.visibilityState === 'hidden') return;
@@ -744,6 +751,12 @@ export async function refreshAccount() {
   try {
     const user = await api.me(a.token);
     setAuth({ ...a, user });
+    // La cuenta manda: si en otro dispositivo se cambió de lista o de súper, este se pone igual
+    const code = state.sync.code;
+    if (user.listCode && user.listCode !== code) await joinSync(user.listCode, user.name).catch(() => {});
+    else if (!user.listCode && !code) await createSync(user.name).catch(() => {});
+    else if (!user.listCode && code) linkAccountList(code);
+    if (user.store && user.store !== state.store) await setStore(user.store, false).catch(() => {});
   } catch (e) {
     if ((e as { status?: number }).status === 401) { logout(); toast('Tu sesión ha caducado. Vuelve a entrar.'); }
   }
