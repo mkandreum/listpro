@@ -64,7 +64,10 @@ const VARIANTS = [
   // En conservas y fritos el aceite cambia el producto: atún en aceite de oliva no es atún en girasol
   { key: 'aceiteTipo', re: [['oliva', /\boliva\b/], ['girasol', /\bgirasol\b/], ['natural', /\bal natural\b|\ben agua\b/], ['escabeche', /\bescabeche\b/]], missing: 0.25 },
   { key: 'sal', re: [['baja', /\bbajo en sal\b|\bsin sal\b|\breducido en sal\b|\bbaja en sal\b/]], missing: 0.3 },
-  { key: 'gluten', re: [['sin', /\bsin gluten\b/]], missing: 0 },
+  // El Corte Inglés pone "sin gluten" en casi todo; solo importa si lo dice el tuyo y el otro no (celíacos)
+  { key: 'gluten', re: [['sin', /\bsin gluten\b/]], missing: { a: 'reject', b: 0 } },
+  { key: 'alas', re: [['con', /\bcon alas\b/], ['sin', /\bsin alas\b/]], missing: 0.2 },
+  { key: 'acetona', re: [['sin', /\bsin acetona\b/], ['con', /\bcon acetona\b/]], missing: 0.2 },
   { key: 'corteza', re: [['sin', /\bsin corteza\b/]], missing: 'reject' },
   // Sabores: un yogur natural no es uno de fresa, ni una cola zero es una cola zero vainilla
   { key: 'sabor', re: [['vainilla', /\bvainilla\b/], ['limon', /\blimon\b/], ['naranja', /\bnaranja\b/], ['fresa', /\bfresas?\b/], ['cereza', /\bcerezas?\b|\bcherry\b/], ['melocoton', /\bmelocoton\b/], ['pina', /\bpina\b/], ['mango', /\bmango\b/], ['frambuesa', /\bframbuesas?\b/], ['menta', /\bmenta\b/], ['caramelo', /\bcaramelo\b/], ['chocolate', /\bchocolate\b|\bcacao\b/], ['conleche', /\bcon leche\b/]], missing: 'reject' },
@@ -73,10 +76,21 @@ const VARIANTS = [
   { key: 'curacion', re: [['semicurado', /\bsemicurad/], ['curado', /\bcurad[oa]\b/], ['tierno', /\btiern[oa]\b/], ['viejo', /\bviej[oa]\b|\banejo\b/]], missing: 0.15 },
 ];
 
+// Variantes con valor: la talla de un pañal o el tono de un tinte tienen que ser el mismo
+const VALUED = [
+  { key: 'talla', re: /\btalla (\d+|xxs|xs|s|m|l|xl|xxl)\b/, missing: 0.2 },
+  { key: 'tono', re: /\b(\d{1,2})(?:[.,]\d+)?\s?[a-z]?\s(?:castan|rubio|rubia|moren|negro|caoba|cobriz|marron|chocolate|platin)/, missing: 0.3, only: /\bcoloracion\b|\btinte\b/ },
+];
+
 function variantsOf(coreName) {
   const out = {};
   for (const g of VARIANTS) {
     for (const [v, re] of g.re) if (re.test(coreName)) { out[g.key] = v; break; }
+  }
+  for (const g of VALUED) {
+    if (g.only && !g.only.test(coreName)) continue;
+    const m = g.re.exec(coreName);
+    if (m) out[g.key] = m[1];
   }
   return out;
 }
@@ -84,12 +98,14 @@ function variantsOf(coreName) {
 /** Diferencia de variantes: null si no se pueden comparar; si no, la penalización. */
 function variantPenalty(a, b) {
   let p = 0;
-  for (const g of VARIANTS) {
+  for (const g of [...VARIANTS, ...VALUED]) {
     const va = a[g.key], vb = b[g.key];
     if (va === vb) continue;
     if (va && vb) return null;
-    if (g.missing === 'reject') return null;
-    p += g.missing;
+    // missing puede depender del lado: { a } si solo lo dice el producto de la cesta, { b } si solo el otro
+    const miss = typeof g.missing === 'object' ? (va ? g.missing.a : g.missing.b) : g.missing;
+    if (miss === 'reject') return null;
+    p += miss;
   }
   return p;
 }
@@ -115,7 +131,8 @@ const toBase = (n, unit) => {
 export function quantity(size, name = '') {
   const s = fold(`${size ?? ''} | ${name ?? ''}`).replace(/(\d),(\d)/g, '$1.$2');
   // "6 x 125 g", "6 ud. x 125 g", "4 paquetes x 200 g", "pack 2 x 200 g"
-  let m = new RegExp(`(\\d+)\\s*(?:(?:${COUNT_WORDS})\\.?\\s*)?x\\s*(\\d+(?:\\.\\d+)?)\\s*(kg|g|gr|l|ml|cl)\\b`).exec(s);
+  // "6 mini briks x 200 ml", "6 botellines x 330 ml": hasta tres palabras entre el número y la "x"
+  let m = /(\d+)\s*(?:[a-z.]+\s+){0,3}x\s*(\d+(?:\.\d+)?)\s*(kg|g|gr|l|ml|cl)\b/.exec(s);
   if (m) return { ...toBase(Number(m[1]) * num(m[2]), m[3]), n: Number(m[1]) };
   // Detergentes: se comparan por lavados, no por litros
   const lav = /(\d+)\s*(?:lavados|dosis|cacitos|capsulas|pastillas)\b/.exec(s);
@@ -125,7 +142,8 @@ export function quantity(size, name = '') {
   const pack = new RegExp(`\\bpack(?:-|\\s+de\\s+|\\s+)(\\d+)\\b|(?<!intensidad\\s)\\b(\\d+)\\s*(?:${PLURAL_COUNT})\\b`).exec(s);
   if (amount) {
     const one = toBase(num(amount[1]), amount[2]);
-    const n = pack ? Number(pack[1] ?? pack[2]) : 1;
+    // Sin la palabra "pack", el peso del formato ya es el total ("Tortilla de trigo 10 unidades", 360 g)
+    const n = pack && /\bpack\b/.test(s) ? Number(pack[1] ?? pack[2]) : 1;
     // Si el formato ya da el total ("envase 800 g" con "4 paquetes x 200 g") lo de arriba ya lo resolvió
     if (one) return { ...one, q: one.q * (n > 1 && n <= 48 ? n : 1), n: n > 1 && n <= 48 ? n : 1 };
   }
@@ -152,7 +170,8 @@ function measure(r) {
   if (parsed?.u === 'lv') return parsed;
   const ref = fromRef(r.price, r.ref_price, r.ref_format);
   // Lo que dice el súper manda, salvo que se contradiga mucho con lo que pone el envase (precios por unidad mal puestos)
-  if (ref && (!parsed || parsed.u !== ref.u || Math.abs(Math.log(ref.q / parsed.q)) < 0.4)) return { ...ref, n: parsed?.n ?? 1 };
+  // Si no cuadran, Mercadona y Consum suelen acertar con su precio por unidad; El Corte Inglés a veces lo pone mal
+  if (ref && (!parsed || parsed.u !== ref.u || Math.abs(Math.log(ref.q / parsed.q)) < 0.4 || r.store !== 'eci')) return { ...ref, n: parsed?.n ?? 1 };
   return parsed;
 }
 
@@ -293,7 +312,11 @@ function optionsIn(it, bucket) {
   }
   for (const o of scored) {
     const r = it.qty && o.item.qty && it.qty.u === o.item.qty.u ? closest(it.qty, o.item.qty) : null;
-    o.match = o.score >= MIN_EQUIVALENT && r != null && r > 0.3 && r < 3.5 ? 'equivalent' : 'similar';
+    // Si por kilo o litro cuesta 4 veces más (o menos), no es el mismo producto aunque el nombre se parezca:
+    // cubo de basura frente a bolsas, espaguetis frente a espaguetis sin gluten, un pepino frente a mini pepinos
+    const pr = it.qty && o.item.qty && it.qty.u === o.item.qty.u ? unitCost(o.item) / unitCost(it) : 1;
+    // Más caro no da ahorros falsos, así que ahí hay más margen (las especias de El Corte Inglés cuestan el doble o el triple)
+    o.match = o.score >= MIN_EQUIVALENT && r != null && r > 0.3 && r < 3.5 && pr > 0.25 && pr < 6 ? 'equivalent' : 'similar';
   }
   // Primero los equivalentes; entre los que se parecen casi igual, el más barato por kilo o litro
   const rank = (o) => (o.match === 'equivalent' ? 1 : 0);
