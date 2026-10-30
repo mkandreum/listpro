@@ -94,7 +94,7 @@ img { display: block; max-width: 100%; }
 .topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: calc(16px + env(safe-area-inset-top)) 0 14px; }
 .brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .brand-mark { width: 54px; height: 54px; flex: none; border-radius: 17px; display: grid; place-items: center; color: #fff; background: var(--grad); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .35), var(--glow); }
-.wordmark { font-family: var(--display); font-weight: 800; font-size: 2.15rem; letter-spacing: -.045em; line-height: .95; }
+.wordmark { font-family: var(--display); font-weight: 800; font-size: 2.15rem; letter-spacing: -.045em; line-height: .95; white-space: nowrap; }
 .wordmark em { font-style: normal; color: var(--green-hi); }
 .tagline { display: block; font-size: .9rem; color: var(--ink-2); font-weight: 500; margin-top: 3px; }
 .stamp { display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 999px; white-space: nowrap; border: 1px solid color-mix(in srgb, var(--green-hi) 45%, transparent); background: var(--green-soft); font-weight: 600; font-size: .8rem; }
@@ -745,9 +745,14 @@ img { display: block; max-width: 100%; }
 .total-block .label .store-dot { vertical-align: -4px; box-shadow: 0 0 0 2px rgba(255, 255, 255, .6); }
 .stamp .short { display: none; }
 @media (max-width: 520px) {
-  .topbar .wordmark { display: none; }
+  /* En móvil también se ve el nombre: solo se acorta el tamaño */
+  .topbar .wordmark { font-size: 1.55rem; }
   .stamp .long { display: none; }
   .stamp .short { display: inline; }
+}
+@media (max-width: 380px) {
+  .topbar .brand { gap: 8px; }
+  .topbar .wordmark { font-size: 1.4rem; }
 }
 .store-tile { color: var(--ink); }
 .store-tile b { font-size: 1rem; overflow-wrap: anywhere; }
