@@ -155,7 +155,8 @@ export function scheduleScraping({ hour = Number(process.env.SCRAPE_HOUR ?? 6), 
   // ningún catálogo debe quedarse con más de maxAgeHours.
   let watchdogBusy = false;
   const watchdog = setInterval(async () => {
-    if (watchdogBusy) return;
+    // No arrancar otro súper mientras la pasada diaria (o un admin) está en marcha.
+    if (watchdogBusy || isScraping()) return;
     const due = STORES.filter((s) => {
       const last = getMeta(metaKey(s.id, 'catalog_updated_at'));
       return !last || Date.now() - Date.parse(last) > maxAgeHours * 3600_000;
