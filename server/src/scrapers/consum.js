@@ -84,7 +84,9 @@ function toRow(p, place, position) {
     ref_format: refFormat(p.priceData?.unitPriceUnitType),
     // El precio de siempre mientras dura la oferta
     previous_price: offer && regular && regular.centAmount > offer.centAmount ? num(regular.centAmount) : null,
-    image: d.imageURL ?? null,
+    // imageURL apunta a un fichero que ya no existe en el CDN (devuelve un 404 de 3 bytes).
+    // La foto real está en media[] como <código>_001.jpg
+    image: (p.media ?? []).find((m) => m.type === 'P')?.url ?? d.imageURL ?? null,
     share_url: d.url ?? null,
     is_new: d.novelty ? 1 : 0,
     ean: p.ean ? String(p.ean) : '',
