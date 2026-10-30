@@ -54,7 +54,7 @@ const VARIANTS = [
   { key: 'grasa', re: [['semi', /\bsemi ?desnatad/], ['desnatada', /\bdesnatad/], ['entera', /\bentera\b/]], missing: 0.3 },
   { key: 'lactosa', re: [['sin', /\bsin lactosa\b|\b0% lactosa/]], missing: 'reject' },
   { key: 'aceite', re: [['virgen extra', /\bvirgen extra\b|\bv\.? ?e\.?\b/], ['virgen', /\bvirgen\b/], ['suave', /\bsuave\b|0[,.]4/], ['intenso', /\bintenso\b|\b1º/]], missing: 0.3 },
-  { key: 'cafeina', re: [['descafeinado', /\bdescafeinad|\bsin cafeina\b|\bdecaf/]], missing: 'reject' },
+  { key: 'cafeina', re: [['descafeinado', /\bdescafeinad|\bsin cafeina\b|\bzero cafeina\b|\bdecaf/]], missing: 'reject' },
   { key: 'integral', re: [['integral', /\bintegral\b/]], missing: 'reject' },
   { key: 'azucar', re: [['sin', /\bsin azucar|\b0% azucar|\bsin azucares|\bzero\b|\bcero\b|\blight\b|\bedulcorad/], ['con', /\bazucarad|\bcon azucar\b/]], missing: 0.25 },
   { key: 'gas', re: [['con', /\bcon gas\b|\bgasificad/]], missing: 'reject' },
@@ -65,6 +65,12 @@ const VARIANTS = [
   { key: 'aceiteTipo', re: [['oliva', /\boliva\b/], ['girasol', /\bgirasol\b/], ['natural', /\bal natural\b|\ben agua\b/], ['escabeche', /\bescabeche\b/]], missing: 0.25 },
   { key: 'sal', re: [['baja', /\bbajo en sal\b|\bsin sal\b|\breducido en sal\b|\bbaja en sal\b/]], missing: 0.3 },
   { key: 'gluten', re: [['sin', /\bsin gluten\b/]], missing: 0 },
+  { key: 'corteza', re: [['sin', /\bsin corteza\b/]], missing: 'reject' },
+  // Sabores: un yogur natural no es uno de fresa, ni una cola zero es una cola zero vainilla
+  { key: 'sabor', re: [['vainilla', /\bvainilla\b/], ['limon', /\blimon\b/], ['naranja', /\bnaranja\b/], ['fresa', /\bfresas?\b/], ['cereza', /\bcerezas?\b|\bcherry\b/], ['melocoton', /\bmelocoton\b/], ['pina', /\bpina\b/], ['mango', /\bmango\b/], ['frambuesa', /\bframbuesas?\b/], ['menta', /\bmenta\b/], ['caramelo', /\bcaramelo\b/], ['chocolate', /\bchocolate\b|\bcacao\b/], ['conleche', /\bcon leche\b/]], missing: 'reject' },
+  // Quesos: la leche y la curación cambian el producto
+  { key: 'lecheQueso', re: [['oveja', /\boveja\b/], ['cabra', /\bcabra\b/], ['mezcla', /\bmezcla\b/], ['vaca', /\bvaca\b/]], missing: 0.2 },
+  { key: 'curacion', re: [['semicurado', /\bsemicurad/], ['curado', /\bcurad[oa]\b/], ['tierno', /\btiern[oa]\b/], ['viejo', /\bviej[oa]\b|\banejo\b/]], missing: 0.15 },
 ];
 
 function variantsOf(coreName) {
@@ -91,6 +97,8 @@ function variantPenalty(a, b) {
 // ───────── Cantidad total y precio por unidad ─────────
 
 const COUNT_WORDS = 'unidades|unidad|uds?|latas?|botellas?|briks?|bolsas?|paquetes?|envases?|tarrinas?|sobres?|botes?|tarros?|frascos?|piezas?|rollos?|cajas?';
+// Para contar envases sin "x" solo valen plurales ("8 unidades 120 g"): "intensidad 8 paquete 500 g" no es un pack de 8
+const PLURAL_COUNT = 'unidades|uds|latas|botellas|briks|bolsas|paquetes|envases|tarrinas|sobres|botes|tarros|frascos|piezas|rollos|cajas';
 const num = (s) => Number(String(s).replace(',', '.'));
 const toBase = (n, unit) => {
   switch (unit) {
@@ -109,17 +117,18 @@ export function quantity(size, name = '') {
   // "6 x 125 g", "6 ud. x 125 g", "4 paquetes x 200 g", "pack 2 x 200 g"
   let m = new RegExp(`(\\d+)\\s*(?:(?:${COUNT_WORDS})\\.?\\s*)?x\\s*(\\d+(?:\\.\\d+)?)\\s*(kg|g|gr|l|ml|cl)\\b`).exec(s);
   if (m) return { ...toBase(Number(m[1]) * num(m[2]), m[3]), n: Number(m[1]) };
+  // Detergentes: se comparan por lavados, no por litros
+  const lav = /(\d+)\s*(?:lavados|dosis|cacitos|capsulas|pastillas)\b/.exec(s);
+  if (lav) return { q: Number(lav[1]), u: 'lv', n: 1 };
   const amount = /(\d+(?:\.\d+)?)\s*(kg|grs?|g|litros?|lt|l|ml|cl)\b/.exec(s);
   // "pack 8 unidades 120 g", "pack 6 botellas 2 l", "Pack-6 ..." (El Corte Inglés pone el tamaño de una sola)
-  const pack = new RegExp(`\\bpack(?:-|\\s+de\\s+|\\s+)(\\d+)\\b|\\b(\\d+)\\s*(?:${COUNT_WORDS})\\b`).exec(s);
+  const pack = new RegExp(`\\bpack(?:-|\\s+de\\s+|\\s+)(\\d+)\\b|(?<!intensidad\\s)\\b(\\d+)\\s*(?:${PLURAL_COUNT})\\b`).exec(s);
   if (amount) {
     const one = toBase(num(amount[1]), amount[2]);
     const n = pack ? Number(pack[1] ?? pack[2]) : 1;
     // Si el formato ya da el total ("envase 800 g" con "4 paquetes x 200 g") lo de arriba ya lo resolvió
     if (one) return { ...one, q: one.q * (n > 1 && n <= 48 ? n : 1), n: n > 1 && n <= 48 ? n : 1 };
   }
-  const lav = /(\d+)\s*(?:lavados|dosis|cacitos|capsulas|pastillas)\b/.exec(s);
-  if (lav) return { q: Number(lav[1]), u: 'lv', n: 1 };
   if (pack) return { q: Number(pack[1] ?? pack[2]), u: 'ud', n: 1 };
   if (/\bmedia docena\b|\b1\/2 docena\b/.test(s)) return { q: 6, u: 'ud', n: 1 };
   if (/\bdocena\b/.test(s)) return { q: 12, u: 'ud', n: 1 };
@@ -137,14 +146,14 @@ function fromRef(price, refPrice, refFormat) {
 }
 
 function measure(r) {
+  // Fruta, carne y pescado "al peso" de El Corte Inglés: el precio es por kilo
+  if (/\bal peso\b/.test(fold(r.name)) && fold(r.ref_format) === 'kg') return { q: 1000, u: 'g', n: 1 };
   const parsed = quantity(r.size, r.name);
+  if (parsed?.u === 'lv') return parsed;
   const ref = fromRef(r.price, r.ref_price, r.ref_format);
   // Lo que dice el súper manda, salvo que se contradiga mucho con lo que pone el envase (precios por unidad mal puestos)
   if (ref && (!parsed || parsed.u !== ref.u || Math.abs(Math.log(ref.q / parsed.q)) < 0.4)) return { ...ref, n: parsed?.n ?? 1 };
-  if (parsed) return parsed;
-  // Fruta, carne y pescado "al peso" de El Corte Inglés: el precio es por kilo
-  if (/\bal peso\b/.test(fold(r.name)) && fold(r.ref_format) === 'kg') return { q: 1000, u: 'g', n: 1 };
-  return null;
+  return parsed;
 }
 
 const PER = { g: ['kg', 1000], ml: ['L', 1000], ud: ['ud', 1], lv: ['lavado', 1] };
@@ -221,7 +230,7 @@ function similarity(a, b) {
   const base = shared / weightOf(a.tokens);
   if (base < 0.45) return 0;
   // Cuánto de lo que describe a "a" está en "b", con algo de castigo por lo que sobra en "b"
-  let score = base - 0.15 * ((weightOf(b.tokens) - shared) / weightOf(b.tokens)) - vp;
+  let score = base - 0.3 * ((weightOf(b.tokens) - shared) / weightOf(b.tokens)) - vp;
   // La palabra que más distingue a "a" (sin contar el tipo) tiene que estar: aceite de coco no es aceite de oliva
   let key = null;
   for (const t of a.tokens) if (t !== a.head && (!key || weight(t) > weight(key))) key = t;
