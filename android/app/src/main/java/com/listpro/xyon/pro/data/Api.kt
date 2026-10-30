@@ -54,15 +54,24 @@ class Api(private val base: String = BuildConfig.API_BASE) {
 
     suspend fun getPlan(id: String): MealPlan = get("/api/plans/$id")
 
-    @Serializable private data class PlanRequest(val prefs: PlanPrefs)
+    @Serializable private data class PlanRequest(val prefs: PlanPrefs, val avoid: List<String> = emptyList())
+    @Serializable private data class SwapRequest(val index: Int)
     @Serializable private data class ApiError(val error: String = "")
 
     // Crear un plan llama a la IA y puede tardar hasta un minuto
     private val slowClient = client.newBuilder().readTimeout(120, TimeUnit.SECONDS).callTimeout(150, TimeUnit.SECONDS).build()
 
-    suspend fun createPlan(prefs: PlanPrefs): MealPlan = withContext(Dispatchers.IO) {
-        val body = json.encodeToString(PlanRequest.serializer(), PlanRequest(prefs)).toRequestBody(jsonType)
-        slowClient.newCall(Request.Builder().url("$base/api/plans").post(body).build()).execute().use { res ->
+    /** [avoid]: recetas que no queremos que repita (las del plan que se cambia). */
+    suspend fun createPlan(prefs: PlanPrefs, avoid: List<String> = emptyList()): MealPlan =
+        postPlan("/api/plans", json.encodeToString(PlanRequest.serializer(), PlanRequest(prefs.normalized().let { it.copy(nights = it.days) }, avoid)))
+
+    /** Cambia una receta suelta; devuelve un plan nuevo con otro id. */
+    suspend fun swapRecipe(planId: String, index: Int): MealPlan =
+        postPlan("/api/plans/$planId/swap", json.encodeToString(SwapRequest.serializer(), SwapRequest(index)))
+
+    private suspend fun postPlan(path: String, payload: String): MealPlan = withContext(Dispatchers.IO) {
+        val body = payload.toRequestBody(jsonType)
+        slowClient.newCall(Request.Builder().url("$base$path").post(body).build()).execute().use { res ->
             val text = res.body?.string().orEmpty()
             if (!res.isSuccessful) {
                 val msg = runCatching { json.decodeFromString(ApiError.serializer(), text).error }.getOrNull()

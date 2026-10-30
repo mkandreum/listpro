@@ -97,7 +97,7 @@ data class ListData(
     val addedPrices: Map<String, Double> = emptyMap(),
     val inCart: List<String> = emptyList(),
     val savedBaskets: List<SavedBasket> = emptyList(),
-    /** Plan de cenas activo y preferencias: así se ve también en los otros dispositivos. */
+    /** Plan de recetas activo y preferencias: así se ve también en los otros dispositivos. */
     val planId: String? = null,
     val planPrefs: PlanPrefs? = null,
     /** Lista compartida: quién está, quién pidió y quién cogió cada producto, y las cuentas. */
@@ -154,13 +154,18 @@ data class UserState(
     val guest: Boolean = false,
 )
 
-// ───────────── Planes de cenas ─────────────
+// ───────────── Planes de recetas ─────────────
 
 @Serializable
 data class PlanPrefs(
     val budget: Int = 45,
     val people: Int = 2,
+    /** Días a planificar; 0 en preferencias guardadas antes de las recetas (usa [normalized]). */
+    val days: Int = 0,
+    /** Nombre antiguo de [days]: se sigue mandando para los servidores de antes. */
     val nights: Int = 5,
+    /** desayuno, comida, merienda y/o cena. */
+    val meals: List<String> = listOf("cena"),
     val maxMinutes: Int = 40,
     val diets: List<String> = listOf("omnivora"),
     val appliances: List<String> = listOf("fuego", "microondas"),
@@ -169,7 +174,9 @@ data class PlanPrefs(
     val allergies: String = "",
     val pantry: String = "",
     val store: String = "mercadona",
-)
+) {
+    fun normalized() = copy(days = if (days > 0) days else nights, meals = meals.ifEmpty { listOf("cena") })
+}
 
 @Immutable
 @Serializable
@@ -192,6 +199,9 @@ data class PlanIngredient(
 @Serializable
 data class PlanRecipe(
     val day: String,
+    /** Los planes antiguos no lo traen: eran todo cenas. */
+    val meal: String = "cena",
+    val base: String = "",
     val name: String,
     val description: String = "",
     val minutes: Int = 0,
@@ -217,7 +227,16 @@ data class ShoppingItem(
     val packs: Int,
     val cost: Double,
     val usedIn: List<String> = emptyList(),
+    val usedFor: List<MealUse> = emptyList(),
 )
+
+@Immutable
+@Serializable
+data class MealUse(val day: String, val meal: String = "cena")
+
+@Immutable
+@Serializable
+data class PlanSection(val summary: String = "", val count: Int = 0, val kcalAvg: Int = 0, val costPerServing: Double = 0.0)
 
 @Serializable
 data class PlanTotals(
@@ -225,6 +244,7 @@ data class PlanTotals(
     val consumed: Double = 0.0,
     val perServing: Double = 0.0,
     val kcalAvg: Int = 0,
+    val kcalDay: Int = 0,
     val proteinAvg: Int = 0,
     val budget: Double = 0.0,
     val overBudget: Boolean = false,
@@ -238,6 +258,7 @@ data class MealPlan(
     val prefs: PlanPrefs = PlanPrefs(),
     val title: String = "",
     val summary: String = "",
+    val sections: Map<String, PlanSection> = emptyMap(),
     val recipes: List<PlanRecipe> = emptyList(),
     val shopping: List<ShoppingItem> = emptyList(),
     val totals: PlanTotals = PlanTotals(),

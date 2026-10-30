@@ -1,20 +1,30 @@
-import { useEffect, useMemo, useState } from 'react';
+import { Children, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
-  AlertTriangle, ChefHat, Clock3, Flame, Microwave, Minus, Plus, RefreshCw, ShoppingBasket, SlidersHorizontal, Sparkles, Store, Wallet,
+  AlertTriangle, Apple, Check, ChefHat, Clock3, Coffee, Flame, Minus, Moon, Plus, RefreshCw, ShoppingBasket, SlidersHorizontal,
+  Soup, Sparkles, Store, Trash2, Wallet,
 } from 'lucide-react';
 import { api } from '../api';
 import { money } from '../lib';
 import { href, navigate } from '../router';
-import { addPlanToBasket, clearPlan, generatePlan, toast, useStore } from '../store';
-import type { MealPlan, PlanPrefs, PlanRecipe, PlannerOptions } from '../types';
+import { addPlanToBasket, clearPlan, generatePlan, swapRecipe, toast, useStore } from '../store';
+import type { MealPlan, MealType, PlanPrefs, PlanRecipe, PlannerOptions } from '../types';
 import { haptic } from '../fx/haptics';
-import { useTweened } from '../fx/motion';
+import { reducedMotion, useTweened } from '../fx/motion';
 import { Price } from '../components/ProductTag';
 
 export const DEFAULT_PREFS: PlanPrefs = {
-  budget: 45, people: 2, nights: 5, maxMinutes: 40, diets: ['omnivora'], appliances: ['fuego', 'microondas'],
+  budget: 45, people: 2, days: 5, meals: ['cena'], maxMinutes: 40, diets: ['omnivora'], appliances: ['fuego', 'microondas'],
   likes: '', dislikes: '', allergies: '', pantry: '', store: 'mercadona',
 };
+
+// Color, icono y coste orientativo por ración de cada comida (para sugerir presupuesto). Igual en Android.
+export const MEALS: Record<MealType, { label: string; plural: string; icon: typeof Coffee; hue: string; perServing: number }> = {
+  desayuno: { label: 'Desayuno', plural: 'Desayunos', icon: Coffee, hue: '#F59E0B', perServing: 0.9 },
+  comida: { label: 'Comida', plural: 'Comidas', icon: Soup, hue: '#F2711C', perServing: 2.6 },
+  merienda: { label: 'Merienda', plural: 'Meriendas', icon: Apple, hue: '#E8508E', perServing: 0.7 },
+  cena: { label: 'Cena', plural: 'Cenas', icon: Moon, hue: '#6366F1', perServing: 2.1 },
+};
+const MEAL_ORDER = Object.keys(MEALS) as MealType[];
 
 const APPLIANCE_SHORT: Record<string, string> = {
   fuego: 'Fuego', horno: 'Horno', microondas: 'Micro', freidora_aire: 'Freidora de aire', olla_rapida: 'Olla rápida',
@@ -24,45 +34,62 @@ const DIET_SHORT: Record<string, string> = {
   omnivora: 'De todo', vegetariana: 'Vegetariana', vegana: 'Vegana', pescetariana: 'Pescetariana', sin_gluten: 'Sin gluten',
   sin_lactosa: 'Sin lactosa', alta_proteina: 'Alta en proteína', baja_carbohidratos: 'Baja en hidratos', ligera: 'Ligera', halal: 'Halal',
 };
-const LOADING = ['Mirando los precios de hoy…', 'Cuadrando tu presupuesto…', 'Eligiendo cenas que te gusten…', 'Reaprovechando ingredientes…', 'Calculando la nutrición…', 'Montando tu lista de la compra…'];
+const LOADING = ['Mirando los precios de hoy…', 'Repartiendo la semana…', 'Cuadrando tu presupuesto…', 'Eligiendo platos que no se repitan…', 'Reaprovechando ingredientes…', 'Calculando la nutrición…', 'Montando tu lista de la compra…'];
+
+/** Los planes de antes de las recetas solo tenían cenas y `nights`. */
+const mealOf = (r: PlanRecipe): MealType => r.meal ?? 'cena';
+const withDefaults = (p: Partial<PlanPrefs> | null | undefined): PlanPrefs => ({
+  ...DEFAULT_PREFS, ...p, days: p?.days ?? p?.nights ?? DEFAULT_PREFS.days, meals: p?.meals?.length ? p.meals : ['cena'],
+});
+const round5 = (n: number) => Math.max(15, Math.round(n / 5) * 5);
+export const suggestedBudget = (p: PlanPrefs) => round5(p.meals.reduce((a, m) => a + MEALS[m].perServing, 0) * p.people * p.days * 1.15);
 
 export function PlanScreen({ recipe }: { recipe?: number }) {
   const plan = useStore((s) => s.plan);
   const savedPrefs = useStore((s) => s.planPrefs);
   const [editing, setEditing] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<MealType[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [options, setOptions] = useState<PlannerOptions | null>(null);
 
   useEffect(() => { api.plannerOptions().then(setOptions).catch(() => setOptions(null)); }, []);
 
-  const run = async (prefs: PlanPrefs) => {
-    setBusy(true);
+  const run = async (prefs: PlanPrefs, avoid: string[] = []) => {
+    setBusy(prefs.meals);
     setError(null);
     haptic.tap();
     try {
-      await generatePlan(prefs);
+      await generatePlan(prefs, avoid);
       haptic.success();
       setEditing(false);
       window.scrollTo({ top: 0 });
     } catch (e) {
       haptic.warn();
-      setError((e as Error).message);
+      setError((e as Error).message || 'No se ha podido crear el plan. Prueba otra vez.');
     } finally {
-      setBusy(false);
+      setBusy(null);
     }
   };
 
-  if (busy) return <Cooking />;
+  if (busy) return <Cooking meals={busy} />;
   if (!plan || editing) {
-    return <PrefsForm initial={savedPrefs ?? plan?.prefs ?? DEFAULT_PREFS} options={options} error={error} onSubmit={run} onCancel={plan ? () => setEditing(false) : undefined} />;
+    return <PrefsForm initial={withDefaults(savedPrefs ?? plan?.prefs)} options={options} error={error} onSubmit={(p) => run(p)} onCancel={plan ? () => setEditing(false) : undefined} />;
   }
   const open = recipe != null ? plan.recipes[recipe] : undefined;
   return (
     <>
-      <PlanView plan={plan} onRedo={() => run(plan.prefs)} onEdit={() => setEditing(true)} />
-      {open && <RecipeSheet r={open} onClose={() => history.length > 1 ? history.back() : navigate({ name: 'plan' }, true)} />}
+      <PlanView plan={plan} openMeal={open ? mealOf(open) : undefined} onRedo={() => run(withDefaults(plan.prefs), plan.recipes.map((r) => r.name))} onEdit={() => setEditing(true)} />
+      {open && <RecipeSheet key={`${plan.id}-${recipe}`} r={open} index={recipe!} onClose={() => history.length > 1 ? history.back() : navigate({ name: 'plan' }, true)} />}
     </>
+  );
+}
+
+function Title({ children }: { children?: React.ReactNode }) {
+  return (
+    <div className="row-head" style={{ marginTop: 6 }}>
+      <h1 className="h-section"><span className="h-icon"><ChefHat size={22} strokeWidth={2.2} /></span>Recetas</h1>
+      {children}
+    </div>
   );
 }
 
@@ -82,25 +109,58 @@ function PrefsForm({ initial, options, error, onSubmit, onCancel }: {
       return { ...x, [k]: list };
     });
   };
+  const toggleMeal = (m: MealType) => {
+    haptic.tick();
+    setP((x) => {
+      const on = x.meals.includes(m);
+      if (on && x.meals.length === 1) return x;
+      const meals = MEAL_ORDER.filter((k) => (k === m ? !on : x.meals.includes(k)));
+      // Si el presupuesto iba con la sugerencia, la sigue
+      const next = { ...x, meals };
+      return x.budget === suggestedBudget(x) ? { ...next, budget: suggestedBudget(next) } : next;
+    });
+  };
   const disabled = options != null && !options.enabled;
   const budget = useTweened(p.budget, 200);
+  const suggested = suggestedBudget(p);
+  const max = Math.max(150, round5(suggested * 2));
+  const what = p.meals.length === 1 ? MEALS[p.meals[0]].plural.toLowerCase() : `${p.meals.length} comidas al día`;
 
   return (
-    <form className="plan-form" onSubmit={(e) => { e.preventDefault(); onSubmit(p); }}>
-      <div className="row-head" style={{ marginTop: 6 }}>
-        <h1 className="h-section"><span className="h-icon"><ChefHat size={22} strokeWidth={2.2} /></span>Tus cenas</h1>
-        {onCancel && <button type="button" className="btn" onClick={onCancel}>Cancelar</button>}
-      </div>
-      <p className="muted lead">Te planificamos las cenas de la semana con productos y precios reales de tu súper, a tu gusto y con lo que tienes en la cocina.</p>
+    <form className="plan-form" onSubmit={(e) => { e.preventDefault(); onSubmit({ ...p, nights: p.days }); }}>
+      <Title>{onCancel && <button type="button" className="btn" onClick={onCancel}>Cancelar</button>}</Title>
+      <p className="muted lead">Desayunos, comidas, meriendas y cenas de la semana con productos y precios reales de tu súper, a tu gusto y con lo que tienes en la cocina.</p>
+
+      <section className="panel">
+        <div className="field-head"><ChefHat size={20} /><h2 className="h-block">¿Qué planificamos?</h2></div>
+        <div className="meal-picker" role="group" aria-label="Comidas del día">
+          {MEAL_ORDER.map((m) => {
+            const M = MEALS[m];
+            const on = p.meals.includes(m);
+            return (
+              <button type="button" key={m} className="meal-tile" aria-pressed={on} style={{ '--meal': M.hue } as React.CSSProperties} onClick={() => toggleMeal(m)}>
+                <span className="meal-ico"><M.icon size={22} strokeWidth={2.2} /></span>
+                <b>{M.plural}</b>
+                <span className="tick" aria-hidden><Check size={14} strokeWidth={3} /></span>
+              </button>
+            );
+          })}
+        </div>
+      </section>
 
       <section className="panel">
         <div className="field-head"><Wallet size={20} /><h2 className="h-block">Presupuesto de la semana</h2></div>
         <div className="budget"><Price value={budget} className="price big-price" /><span className="muted">para toda la compra</span></div>
-        <input className="range" type="range" min={15} max={150} step={5} value={p.budget} aria-label="Presupuesto semanal en euros"
+        <input className="range" type="range" min={15} max={max} step={5} value={Math.min(p.budget, max)} aria-label="Presupuesto semanal en euros"
           onChange={(e) => { haptic.tick(); up('budget', Number(e.target.value)); }} />
+        <div className={`suggest${p.budget < suggested * 0.8 ? ' low' : ''}`}>
+          <Sparkles size={16} />
+          <span>Para {p.people} {p.people === 1 ? 'persona' : 'personas'}, {p.days} {p.days === 1 ? 'día' : 'días'} y {what}, calcula unos <b className="num">{money(suggested)}</b>{p.budget < suggested * 0.8 ? '. Con menos, tocará tirar de lo más básico.' : '.'}</span>
+          {p.budget !== suggested && <button type="button" className="link" onClick={() => { haptic.tick(); up('budget', suggested); }}>Usar</button>}
+        </div>
         <div className="two">
-          <Counter label="Personas" value={p.people} min={1} max={8} onChange={(v) => up('people', v)} />
-          <Counter label="Cenas" value={p.nights} min={1} max={7} onChange={(v) => up('nights', v)} />
+          <Counter label="Personas" value={p.people} min={1} max={8} onChange={(v) => setP((x) => ({ ...x, people: v, budget: x.budget === suggestedBudget(x) ? suggestedBudget({ ...x, people: v }) : x.budget }))} />
+          <Counter label="Días" value={p.days} min={1} max={7} onChange={(v) => setP((x) => ({ ...x, days: v, budget: x.budget === suggestedBudget(x) ? suggestedBudget({ ...x, days: v }) : x.budget }))} />
         </div>
       </section>
 
@@ -131,12 +191,13 @@ function PrefsForm({ initial, options, error, onSubmit, onCancel }: {
             <button type="button" key={id} className="chip text-only" aria-pressed={p.appliances.includes(id)} onClick={() => toggle('appliances', id)}>{APPLIANCE_SHORT[id]}</button>
           ))}
         </div>
-        <div className="field-head" style={{ marginTop: 18 }}><Clock3 size={18} /><b>Tiempo máximo por cena</b></div>
+        <div className="field-head" style={{ marginTop: 18 }}><Clock3 size={18} /><b>Tiempo máximo para cocinar</b></div>
         <div className="segmented four" role="group" aria-label="Tiempo máximo">
           {[15, 30, 45, 60].map((m) => (
             <button type="button" key={m} aria-pressed={p.maxMinutes === m} onClick={() => { haptic.tick(); up('maxMinutes', m); }}>{m} min</button>
           ))}
         </div>
+        {p.meals.some((m) => m === 'desayuno' || m === 'merienda') && <p className="muted small">Desayunos y meriendas siempre van rápidos: 10 o 15 minutos como mucho.</p>}
       </section>
 
       <section className="panel">
@@ -149,7 +210,7 @@ function PrefsForm({ initial, options, error, onSubmit, onCancel }: {
       {error && <div className="notice up" role="alert"><AlertTriangle size={20} /><span>{error}</span></div>}
       {disabled && <div className="notice" role="status"><AlertTriangle size={20} /><span>El planificador no está disponible ahora mismo. Vuelve a intentarlo más tarde.</span></div>}
       <button className="btn primary block cta" type="submit" disabled={disabled}><Sparkles size={20} /> Crear mi plan</button>
-      <p className="muted small center">Tarda entre 20 y 60 segundos. No es un servicio de reparto: te ayudamos a organizar la compra y las cenas.</p>
+      <p className="muted small center">Tarda entre 20 y 60 segundos. No es un servicio de reparto: te ayudamos a organizar la compra y la cocina.</p>
     </form>
   );
 }
@@ -178,7 +239,7 @@ function TextField({ label, placeholder, value, onChange }: { label: string; pla
 
 // ───────────── Mientras cocina ─────────────
 
-function Cooking() {
+function Cooking({ meals }: { meals: MealType[] }) {
   const [i, setI] = useState(0);
   useEffect(() => { const t = setInterval(() => setI((x) => (x + 1) % LOADING.length), 2600); return () => clearInterval(t); }, []);
   return (
@@ -186,24 +247,32 @@ function Cooking() {
       <div className="pot"><ChefHat size={46} strokeWidth={1.8} /><span /><span /><span /></div>
       <h2 className="h-block">Preparando tu plan</h2>
       <p key={i} className="muted roll-text">{LOADING[i]}</p>
+      <div className="cooking-meals" aria-hidden>
+        {meals.map((m, k) => {
+          const M = MEALS[m];
+          return <span key={m} style={{ '--meal': M.hue, '--d': k } as React.CSSProperties}><M.icon size={16} /> {M.plural}</span>;
+        })}
+      </div>
     </div>
   );
 }
 
 // ───────────── Plan ─────────────
 
-function PlanView({ plan, onRedo, onEdit }: { plan: MealPlan; onRedo: () => void; onEdit: () => void }) {
+type Tab = MealType | 'compra';
+
+function PlanView({ plan, openMeal, onRedo, onEdit }: { plan: MealPlan; openMeal?: MealType; onRedo: () => void; onEdit: () => void }) {
   const idx = useStore((s) => s.idx);
   const t = plan.totals;
   const pct = Math.min(100, (t.shopping / t.budget) * 100);
   const shopping = useMemo(() => plan.shopping.filter((s) => idx.products.size === 0 || idx.products.has(s.productId)), [plan, idx]);
+  const meals = useMemo(() => MEAL_ORDER.filter((m) => plan.recipes.some((r) => mealOf(r) === m)), [plan]);
+  const tabs: Tab[] = [...meals, 'compra'];
+  const multi = meals.length > 1;
 
   return (
     <>
-      <div className="row-head" style={{ marginTop: 6 }}>
-        <h1 className="h-section"><span className="h-icon"><ChefHat size={22} strokeWidth={2.2} /></span>Tus cenas</h1>
-        <button className="btn" onClick={onEdit}><SlidersHorizontal size={18} /> Ajustar</button>
-      </div>
+      <Title><button className="btn" onClick={onEdit}><SlidersHorizontal size={18} /> Ajustar</button></Title>
 
       <section className="total-block plan-hero" aria-label="Resumen del plan">
         <div className="label">{plan.title}</div>
@@ -216,26 +285,140 @@ function PlanView({ plan, onRedo, onEdit }: { plan: MealPlan; onRedo: () => void
         </div>
         <div className="hero-figures">
           <div><b className="num">{money(t.perServing)}</b><span>por ración</span></div>
-          <div><b className="num">{t.kcalAvg}</b><span>kcal de media</span></div>
-          <div><b className="num">{t.proteinAvg} g</b><span>proteína</span></div>
+          {multi && t.kcalDay ? <div><b className="num">{t.kcalDay}</b><span>kcal al día</span></div> : <div><b className="num">{t.kcalAvg}</b><span>kcal de media</span></div>}
+          <div><b className="num">{plan.recipes.length}</b><span>recetas</span></div>
         </div>
         <div className="total-actions">
           <button className="btn white" onClick={() => {
             haptic.success();
-            const n = addPlanToBasket(shopping);
-            toast(`${n} productos en la cesta`);
+            toast(`${addPlanToBasket(shopping)} productos en la cesta`);
           }}><ShoppingBasket size={18} /> Añadir la compra a la cesta</button>
           <button className="btn ghost-white" onClick={onRedo}><RefreshCw size={18} /> Otro plan</button>
         </div>
       </section>
 
-      {plan.summary && <p className="muted lead" style={{ marginTop: 14 }}>{plan.summary}</p>}
       {plan.warnings.map((w) => <div key={w} className="notice up"><AlertTriangle size={20} /><span>{w}</span></div>)}
 
-      <h2 className="h-section" style={{ marginTop: 30, marginBottom: 12, fontSize: '1.6rem' }}>La semana</h2>
+      <Pager tabs={tabs} initial={openMeal}>
+        {meals.map((m) => <MealPage key={m} plan={plan} meal={m} />)}
+        <ShoppingPage plan={plan} shopping={shopping} />
+      </Pager>
+    </>
+  );
+}
+
+/**
+ * Píldora de secciones + páginas que se deslizan con el dedo (scroll-snap). El indicador sigue al
+ * dedo en tiempo real y la altura se ajusta a la página visible para no dejar huecos.
+ */
+function Pager({ tabs, initial, children }: { tabs: Tab[]; initial?: Tab; children: React.ReactNode }) {
+  const pages = Children.toArray(children);
+  const track = useRef<HTMLDivElement>(null);
+  const bar = useRef<HTMLDivElement>(null);
+  const [active, setActive] = useState(() => Math.max(0, initial ? tabs.indexOf(initial) : 0));
+  const [height, setHeight] = useState<number | undefined>();
+  const key = tabs.join();
+
+  // Al volver de una receta o cambiar de plan, nos colocamos sin animación
+  useLayoutEffect(() => {
+    const el = track.current;
+    if (!el) return;
+    const i = Math.min(active, tabs.length - 1);
+    el.scrollLeft = i * el.clientWidth;
+    bar.current?.style.setProperty('--p', String(i));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+
+  useEffect(() => {
+    const el = track.current;
+    if (!el) return;
+    let raf = 0;
+    const onScroll = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        const p = el.scrollLeft / Math.max(1, el.clientWidth);
+        bar.current?.style.setProperty('--p', p.toFixed(3));
+        const i = Math.round(p);
+        setActive((a) => (a === i ? a : (haptic.tick(), i)));
+      });
+    };
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => { el.removeEventListener('scroll', onScroll); cancelAnimationFrame(raf); };
+  }, []);
+
+  // La altura sigue a la página activa (también cuando crece, p. ej. al cargar imágenes)
+  useEffect(() => {
+    const page = track.current?.children[active] as HTMLElement | undefined;
+    if (!page) return;
+    const ro = new ResizeObserver(() => setHeight(page.offsetHeight));
+    ro.observe(page);
+    return () => ro.disconnect();
+  }, [active, key]);
+
+  const go = useCallback((i: number) => {
+    const el = track.current;
+    if (!el) return;
+    haptic.tap();
+    el.scrollTo({ left: i * el.clientWidth, behavior: reducedMotion() ? 'auto' : 'smooth' });
+    const top = (bar.current?.getBoundingClientRect().top ?? 0) + scrollY - 12;
+    if (scrollY > top) window.scrollTo({ top, behavior: reducedMotion() ? 'auto' : 'smooth' });
+  }, []);
+
+  return (
+    <>
+      <div ref={bar} className="pill-tabs glass" role="tablist" aria-label="Secciones del plan" style={{ '--n': tabs.length, '--active': tabs[active] === 'compra' ? '#16A34A' : MEALS[tabs[active] as MealType].hue } as React.CSSProperties}>
+        <span className="pill-tabs-ind" aria-hidden />
+        {tabs.map((t, i) => {
+          const M = t === 'compra' ? null : MEALS[t];
+          const Icon = M?.icon ?? ShoppingBasket;
+          return (
+            <button key={t} role="tab" id={`tab-${t}`} aria-controls={`page-${t}`} aria-selected={i === active} tabIndex={i === active ? 0 : -1}
+              style={{ '--meal': M?.hue ?? 'var(--green)' } as React.CSSProperties} onClick={() => go(i)}
+              onKeyDown={(e) => {
+                if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+                  const n = (i + (e.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+                  go(n);
+                  (e.currentTarget.parentElement?.children[n + 1] as HTMLElement | undefined)?.focus();
+                }
+              }}>
+              <Icon size={19} strokeWidth={2.3} aria-hidden />
+              <span>{M?.label ?? 'Compra'}</span>
+            </button>
+          );
+        })}
+      </div>
+      <div ref={track} className="pager" style={{ height }}>
+        {pages.map((c, i) => (
+          <div key={tabs[i]} className="pager-page" role="tabpanel" id={`page-${tabs[i]}`} aria-labelledby={`tab-${tabs[i]}`} aria-hidden={i !== active} {...(i !== active ? { inert: '' } : {})}>
+            {c}
+          </div>
+        ))}
+      </div>
+    </>
+  );
+}
+
+function MealPage({ plan, meal }: { plan: MealPlan; meal: MealType }) {
+  const M = MEALS[meal];
+  const list = plan.recipes.map((r, i) => ({ r, i })).filter(({ r }) => mealOf(r) === meal);
+  const sec = plan.sections?.[meal];
+  const kcal = sec?.kcalAvg ?? Math.round(list.reduce((a, { r }) => a + r.nutrition.kcal, 0) / (list.length || 1));
+  const cost = sec?.costPerServing ?? list.reduce((a, { r }) => a + r.costPerServing, 0) / (list.length || 1);
+  const summary = sec?.summary ?? (plan.sections ? '' : plan.summary);
+
+  return (
+    <div style={{ '--meal': M.hue } as React.CSSProperties}>
+      <div className="meal-head">
+        <span className="meal-ico"><M.icon size={22} strokeWidth={2.2} /></span>
+        <div>
+          <h2 className="h-section">{M.plural}</h2>
+          <span className="muted small num">{list.length} {list.length === 1 ? 'receta' : 'recetas'} · {kcal} kcal · {money(cost)}/ración</span>
+        </div>
+      </div>
+      {summary && <p className="muted" style={{ margin: '0 2px 14px' }}>{summary}</p>}
       <div className="dinners">
-        {plan.recipes.map((r, i) => (
-          <a key={r.day} href={href({ name: 'plan', recipe: i })} className="dinner" style={{ '--d': i } as React.CSSProperties} onClick={() => haptic.tap()}>
+        {list.map(({ r, i }, k) => (
+          <a key={`${r.day}-${i}`} href={href({ name: 'plan', recipe: i })} className="dinner" style={{ '--d': k } as React.CSSProperties} onClick={() => haptic.tap()}>
             <div className="dinner-pics" aria-hidden>
               {r.ingredients.filter((x) => x.image).slice(0, 3).map((x) => <img key={x.productId} src={x.image!} alt="" loading="lazy" />)}
             </div>
@@ -247,16 +430,30 @@ function PlanView({ plan, onRedo, onEdit }: { plan: MealPlan; onRedo: () => void
                 <span><Clock3 size={14} /> {r.minutes} min</span>
                 <span><Flame size={14} /> {r.nutrition.kcal} kcal</span>
                 <span>{money(r.costPerServing)}/ración</span>
-                {r.appliances.includes('microondas') && <span><Microwave size={14} /></span>}
               </div>
             </div>
           </a>
         ))}
       </div>
+    </div>
+  );
+}
 
-      <div className="row-head" style={{ marginTop: 34 }}>
-        <h2 className="h-section" style={{ fontSize: '1.6rem' }}>Lista de la compra</h2>
-        <span className="stamp num">{shopping.length} productos</span>
+function ShoppingPage({ plan, shopping }: { plan: MealPlan; shopping: MealPlan['shopping'] }) {
+  const t = plan.totals;
+  const label = (s: MealPlan['shopping'][number]) => {
+    const uses = s.usedFor ?? s.usedIn.map((day) => ({ day, meal: 'cena' as MealType }));
+    const multi = new Set(plan.recipes.map(mealOf)).size > 1;
+    return uses.slice(0, 4).map((u) => `${u.day.slice(0, 3)}${multi ? ` ${MEALS[u.meal]?.label.toLowerCase() ?? ''}` : ''}`).join(', ') + (uses.length > 4 ? ` y ${uses.length - 4} más` : '');
+  };
+  return (
+    <div>
+      <div className="meal-head" style={{ '--meal': 'var(--green)' } as React.CSSProperties}>
+        <span className="meal-ico"><ShoppingBasket size={22} strokeWidth={2.2} /></span>
+        <div>
+          <h2 className="h-section">Lista de la compra</h2>
+          <span className="muted small num">{shopping.length} productos · {money(t.shopping)}</span>
+        </div>
       </div>
       <div className="panel" style={{ marginTop: 0, padding: '6px 16px' }}>
         {shopping.map((s) => (
@@ -264,24 +461,30 @@ function PlanView({ plan, onRedo, onEdit }: { plan: MealPlan; onRedo: () => void
             {s.image ? <img src={s.image} alt="" loading="lazy" /> : <span className="ph" />}
             <div className="info">
               <b>{s.name}</b>
-              <span className="muted small">{s.size} · para {s.usedIn.map((d) => d.slice(0, 3)).join(', ')}</span>
+              <span className="muted small">{s.size} · {label(s)}</span>
             </div>
             <div className="right num"><b>{money(s.cost)}</b><span className="muted small">{s.packs} × {money(s.price)}</span></div>
           </div>
         ))}
         <div className="shop-total num"><span>Total</span><b>{money(t.shopping)}</b></div>
       </div>
+      <button className="btn primary block" style={{ marginTop: 14 }} onClick={() => {
+        haptic.success();
+        toast(`${addPlanToBasket(shopping)} productos en la cesta`);
+      }}><ShoppingBasket size={18} /> Añadir todo a la cesta</button>
       <p className="muted small" style={{ marginTop: 12 }}>
         Precios reales de hoy. La nutrición es una estimación hecha por IA: si tienes alergias, revisa siempre la etiqueta del producto.
       </p>
-      <button className="btn danger block" style={{ marginTop: 18 }} onClick={() => { clearPlan(); toast('Plan borrado'); }}>Borrar el plan</button>
-    </>
+      <button className="btn danger block" style={{ marginTop: 18 }} onClick={() => { clearPlan(); toast('Plan borrado'); }}><Trash2 size={18} /> Borrar el plan</button>
+    </div>
   );
 }
 
 // ───────────── Receta ─────────────
 
-function RecipeSheet({ r, onClose }: { r: PlanRecipe; onClose: () => void }) {
+function RecipeSheet({ r, index, onClose }: { r: PlanRecipe; index: number; onClose: () => void }) {
+  const [done, setDone] = useState<Set<number>>(new Set());
+  const [swapping, setSwapping] = useState(false);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
     addEventListener('keydown', onKey);
@@ -290,15 +493,30 @@ function RecipeSheet({ r, onClose }: { r: PlanRecipe; onClose: () => void }) {
     return () => { removeEventListener('keydown', onKey); document.body.style.overflow = prev; };
   }, [onClose]);
   const n = r.nutrition;
+  const M = MEALS[mealOf(r)];
   const bought = r.ingredients.filter((i) => i.productId).map((i) => ({ productId: i.productId!, packs: Math.max(1, Math.ceil(i.fraction - 0.05)) }));
+  const swap = async () => {
+    setSwapping(true);
+    haptic.tap();
+    try {
+      await swapRecipe(index);
+      haptic.success();
+      toast('Receta cambiada');
+    } catch (e) {
+      haptic.warn();
+      toast((e as Error).message || 'No se ha podido cambiar la receta');
+    } finally {
+      setSwapping(false);
+    }
+  };
 
   return (
     <>
       <div className="sheet-scrim" onClick={onClose} />
-      <div className="sheet recipe" role="dialog" aria-modal="true" aria-labelledby="recipe-title">
+      <div className="sheet recipe" role="dialog" aria-modal="true" aria-labelledby="recipe-title" style={{ '--meal': M.hue } as React.CSSProperties}>
         <div className="grip" />
-        <span className="stamp">{r.day} · {r.servings} {r.servings === 1 ? 'ración' : 'raciones'}</span>
-        <h2 id="recipe-title">{r.name}</h2>
+        <span className="stamp meal-stamp"><M.icon size={14} /> {M.label} · {r.day} · {r.servings} {r.servings === 1 ? 'ración' : 'raciones'}</span>
+        <h2 id="recipe-title" className={swapping ? 'swapping' : undefined}>{r.name}</h2>
         <p className="muted" style={{ marginTop: 6 }}>{r.description}</p>
         <div className="facts num" style={{ marginTop: 12 }}>
           <span><Clock3 size={14} /> {r.minutes} min</span>
@@ -332,14 +550,26 @@ function RecipeSheet({ r, onClose }: { r: PlanRecipe; onClose: () => void }) {
         <p className="muted small" style={{ marginTop: 6 }}>Además: aceite de oliva, sal y pimienta.</p>
 
         <h3 className="h-block" style={{ marginTop: 22 }}>Paso a paso</h3>
-        <ol className="steps">{r.steps.map((s, k) => <li key={k}>{s}</li>)}</ol>
+        <p className="muted small">Toca cada paso para tacharlo mientras cocinas.</p>
+        <ol className="steps">
+          {r.steps.map((s, k) => (
+            <li key={k} aria-checked={done.has(k)} role="checkbox" tabIndex={0}
+              onClick={() => { haptic.tick(); setDone((d) => { const x = new Set(d); if (x.has(k)) x.delete(k); else x.add(k); return x; }); }}
+              onKeyDown={(e) => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); (e.currentTarget as HTMLElement).click(); } }}>
+              {s}
+            </li>
+          ))}
+        </ol>
         {r.tip && <div className="notice down" style={{ marginTop: 14 }}><Sparkles size={18} /><span>{r.tip}</span></div>}
 
         <button className="btn primary block" style={{ marginTop: 20 }} onClick={() => {
           haptic.success();
           toast(`${addPlanToBasket(bought)} ingredientes en la cesta`);
         }}><ShoppingBasket size={18} /> Añadir ingredientes a la cesta</button>
-        <button className="btn block" style={{ marginTop: 10 }} onClick={onClose}>Cerrar</button>
+        <div className="two" style={{ marginTop: 10 }}>
+          <button className="btn" onClick={swap} disabled={swapping}><RefreshCw size={18} className={swapping ? 'spin' : undefined} /> {swapping ? 'Buscando otra…' : 'Cambiar receta'}</button>
+          <button className="btn" onClick={onClose}>Cerrar</button>
+        </div>
       </div>
     </>
   );

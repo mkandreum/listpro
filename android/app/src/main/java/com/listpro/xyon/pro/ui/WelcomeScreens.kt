@@ -130,7 +130,7 @@ private data class Slide(val eyebrow: String, val title: String, val accent: Str
 
 private val SLIDES = listOf(
     Slide("PRECIOS DE HOY", "Tu súper,", "en un clic.", "Más de 4.000 productos de Mercadona con el precio de esta mañana. Ves lo que ha bajado antes de salir de casa.", Color(0xFF22C55E)),
-    Slide("CENAS CON IA", "Cenas que", "cuadran.", "Dinos tu presupuesto, tu dieta y lo que tienes en la cocina. Te montamos las cenas de la semana y la lista de la compra.", Orange),
+    Slide("RECETAS CON IA", "Recetas que", "cuadran.", "Dinos tu presupuesto, tu dieta y lo que tienes en la cocina. Te montamos desayunos, comidas, meriendas y cenas de la semana, y la lista de la compra.", Orange),
     Slide("EN COMPAÑÍA", "Comprad", "juntos.", "Una cesta para toda la casa: quién pide qué, quién lo ha cogido y cuánto os debéis. Sin hacer cuentas.", Color(0xFF7C5CFF)),
 )
 
@@ -454,7 +454,7 @@ fun AuthScreen(vm: AppViewModel, idx: CatalogIndex?) {
                     style = MaterialTheme.typography.displayMedium.copy(fontSize = 34.sp), color = c.ink, modifier = Modifier.padding(top = 22.dp, bottom = 6.dp),
                 )
             }
-            Text(if (isNew) "Tu cesta, tus cenas y tus cuentas, en todos tus móviles." else "Entra y sigue donde lo dejaste.", style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Normal), color = c.ink2)
+            Text(if (isNew) "Tu cesta, tus recetas y tus cuentas, en todos tus móviles." else "Entra y sigue donde lo dejaste.", style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Normal), color = c.ink2)
 
             Column(Modifier.graphicsLayer { translationX = shake.value }) {
                 if (isNew) AuthField("¿Cómo te llamas?", name, { if (it.length <= 24) name = it }, "Así te verán en las listas compartidas", KeyboardOptions(capitalization = KeyboardCapitalization.Words))

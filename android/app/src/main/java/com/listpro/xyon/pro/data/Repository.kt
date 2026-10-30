@@ -461,11 +461,20 @@ class Repository(context: Context, val api: Api = Api()) {
     fun continueAsGuest() { _state.update { it.copy(guest = true) }; persist() }
     fun wantAccount() { _state.update { it.copy(guest = false) }; persist() }
 
-    // --- Planes de cenas ---
-    suspend fun generatePlan(prefs: PlanPrefs): MealPlan {
+    // --- Planes de recetas ---
+    suspend fun generatePlan(prefs: PlanPrefs, avoid: List<String> = emptyList()): MealPlan {
         _state.update { it.copy(list = it.list.copy(planPrefs = prefs)) }
-        val plan = api.createPlan(prefs)
-        _state.update { it.copy(plan = plan, list = it.list.copy(planId = plan.id, planPrefs = prefs)) }
+        return setPlan(api.createPlan(prefs, avoid))
+    }
+
+    /** Cambia una receta del plan por otra. El plan nuevo lleva otro id para que se sincronice. */
+    suspend fun swapRecipe(index: Int): MealPlan {
+        val id = _state.value.plan?.id ?: error("No hay plan")
+        return setPlan(api.swapRecipe(id, index))
+    }
+
+    private fun setPlan(plan: MealPlan): MealPlan {
+        _state.update { it.copy(plan = plan, list = it.list.copy(planId = plan.id)) }
         persist()
         markDirty()
         return plan
@@ -477,7 +486,7 @@ class Repository(context: Context, val api: Api = Api()) {
         markDirty()
     }
 
-    /** Mete en la cesta los envases que hacen falta (de todo el plan o de una cena). */
+    /** Mete en la cesta los envases que hacen falta (de todo el plan o de una receta). */
     fun addToBasket(items: List<Pair<String, Int>>): Int {
         val idx = _catalog.value ?: return 0
         var n = 0

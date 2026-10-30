@@ -522,13 +522,21 @@ export function leaveSync() {
   if (state.auth) createSync(state.auth.user.name).catch(() => {});
 }
 
-// --- Planes de cenas ---
-export async function generatePlan(prefs: PlanPrefs) {
+// --- Planes de recetas ---
+/** `avoid`: nombres de recetas que no queremos que repita (las del plan que se está cambiando). */
+export async function generatePlan(prefs: PlanPrefs, avoid: string[] = []) {
   set({ planPrefs: prefs });
   save('listproPlanPrefs', prefs);
-  const plan = await api.createPlan(prefs).catch((e) => {
-    throw new Error(e?.body?.error ?? 'No se ha podido crear el plan. Prueba otra vez.');
-  });
+  return setPlan(await api.createPlan(prefs, avoid));
+}
+
+/** Cambia una receta del plan por otra. El plan nuevo lleva otro id para que se sincronice. */
+export async function swapRecipe(index: number) {
+  if (!state.plan) throw new Error('No hay plan');
+  return setPlan(await api.swapRecipe(state.plan.id, index));
+}
+
+function setPlan(plan: MealPlan) {
   set({ plan });
   save('listproPlan', plan);
   markDirty();
@@ -541,7 +549,7 @@ export function clearPlan() {
   markDirty();
 }
 
-/** Mete en la cesta los envases que hacen falta para el plan (o solo para una cena). */
+/** Mete en la cesta los envases que hacen falta para el plan (o solo para una receta). */
 export function addPlanToBasket(items: { productId: string; packs: number }[]) {
   const basket = { ...state.basket };
   const addedPrices = { ...state.addedPrices };

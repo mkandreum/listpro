@@ -76,7 +76,7 @@ export interface ListData {
   addedPrices: Record<string, number>;
   inCart?: string[];
   savedBaskets: SavedBasket[];
-  /** Plan de cenas activo y preferencias: así el plan también se ve en los otros dispositivos. */
+  /** Plan de recetas activo y preferencias: así el plan también se ve en los otros dispositivos. */
   planId?: string | null;
   planPrefs?: PlanPrefs | null;
   /** Lista compartida: quién está, quién pidió y quién cogió cada producto, y las cuentas. */
@@ -115,12 +115,18 @@ export interface PriceHistory {
   history: { price: number; at: string }[];
 }
 
-// ───────────── Planes de cenas ─────────────
+// ───────────── Planes de recetas ─────────────
+
+export type MealType = 'desayuno' | 'comida' | 'merienda' | 'cena';
 
 export interface PlanPrefs {
   budget: number;
   people: number;
-  nights: number;
+  /** Días de la semana a planificar. */
+  days: number;
+  /** Nombre antiguo de `days`, de cuando solo había cenas. */
+  nights?: number;
+  meals: MealType[];
   maxMinutes: number;
   diets: string[];
   appliances: string[];
@@ -146,6 +152,9 @@ export interface PlanIngredient {
 
 export interface PlanRecipe {
   day: string;
+  /** Los planes antiguos no lo traen: eran todo cenas. */
+  meal?: MealType;
+  base?: string;
   name: string;
   description: string;
   minutes: number;
@@ -169,6 +178,7 @@ export interface ShoppingItem {
   packs: number;
   cost: number;
   usedIn: string[];
+  usedFor?: { day: string; meal: MealType }[];
 }
 
 export interface MealPlan {
@@ -177,9 +187,10 @@ export interface MealPlan {
   prefs: PlanPrefs;
   title: string;
   summary: string;
+  sections?: Partial<Record<MealType, { summary: string; count: number; kcalAvg: number; costPerServing: number }>>;
   recipes: PlanRecipe[];
   shopping: ShoppingItem[];
-  totals: { shopping: number; consumed: number; perServing: number; kcalAvg: number; proteinAvg: number; budget: number; overBudget: boolean };
+  totals: { shopping: number; consumed: number; perServing: number; kcalAvg: number; kcalDay?: number; proteinAvg: number; budget: number; overBudget: boolean };
   warnings: string[];
 }
 
@@ -187,6 +198,7 @@ export interface PlannerOptions {
   enabled: boolean;
   diets: { id: string; label: string }[];
   appliances: { id: string; label: string }[];
+  meals?: { id: MealType; label: string }[];
   stores: { id: string; label: string }[];
 }
 

@@ -81,7 +81,7 @@ private data class NavItem(val tab: Tab, val label: String, val icon: ImageVecto
 
 private val NAV = listOf(
     NavItem(Tab.Products, "Productos", Icons.Rounded.Storefront),
-    NavItem(Tab.Plan, "Cenas", Icons.Rounded.RestaurantMenu),
+    NavItem(Tab.Plan, "Recetas", Icons.Rounded.RestaurantMenu),
     NavItem(Tab.Basket, "Cesta", Icons.Rounded.ShoppingBasket),
     NavItem(Tab.Stats, "Gastos", Icons.Rounded.BarChart),
     NavItem(Tab.Settings, "Ajustes", Icons.Rounded.Settings),

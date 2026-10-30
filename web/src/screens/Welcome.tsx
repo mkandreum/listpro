@@ -29,9 +29,9 @@ const SLIDES = [
   },
   {
     key: 'cenas',
-    eyebrow: 'Cenas con IA',
-    title: <>Cenas que<br /><em>cuadran.</em></>,
-    body: 'Dinos tu presupuesto, tu dieta y lo que tienes en la cocina. Te montamos las cenas de la semana y la lista de la compra.',
+    eyebrow: 'Recetas con IA',
+    title: <>Recetas que<br /><em>cuadran.</em></>,
+    body: 'Dinos tu presupuesto, tu dieta y lo que tienes en la cocina. Te montamos desayunos, comidas, meriendas y cenas de la semana, y la lista de la compra.',
   },
   {
     key: 'juntos',
@@ -212,7 +212,7 @@ export function AuthScreen() {
           <button role="tab" aria-selected={!isNew} aria-pressed={!isNew} onClick={() => { setMode('login'); setError(null); }}>Ya tengo cuenta</button>
         </div>
         <h1 key={mode} className="auth-title">{isNew ? <>Crea tu <em>cuenta</em></> : <>Hola de <em>nuevo</em></>}</h1>
-        <p className="muted">{isNew ? 'Tu cesta, tus cenas y tus cuentas, en todos tus móviles.' : 'Entra y sigue donde lo dejaste.'}</p>
+        <p className="muted">{isNew ? 'Tu cesta, tus recetas y tus cuentas, en todos tus móviles.' : 'Entra y sigue donde lo dejaste.'}</p>
 
         <form key={shake} className={`auth-form ${shake ? 'shake' : ''}`} onSubmit={submit} noValidate>
           {isNew && (

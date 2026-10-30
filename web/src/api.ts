@@ -35,9 +35,8 @@ export const api = {
   catalogMeta: () => fetch(`${BASE}/api/catalog/meta`, { cache: 'no-store' }).then((r) => json<{ version: string; updatedAt: string }>(r)),
   history: (id: string) => fetch(`${BASE}/api/products/${encodeURIComponent(id)}/history`).then((r) => json<PriceHistory>(r)),
   plannerOptions: () => fetch(`${BASE}/api/planner/options`).then((r) => json<PlannerOptions>(r)),
-  createPlan: (prefs: PlanPrefs) =>
-    fetch(`${BASE}/api/plans`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prefs }) })
-      .then((r) => json<MealPlan>(r)),
+  createPlan: (prefs: PlanPrefs, avoid: string[] = []) => send('POST', '/api/plans', { prefs, avoid }).then((r) => friendly<MealPlan>(r)),
+  swapRecipe: (id: string, index: number) => send('POST', `/api/plans/${encodeURIComponent(id)}/swap`, { index }).then((r) => friendly<MealPlan>(r)),
   getPlan: (id: string) => fetch(`${BASE}/api/plans/${encodeURIComponent(id)}`).then((r) => json<MealPlan>(r)),
   createList: (data: ListData) =>
     fetch(`${BASE}/api/lists`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ data }) })

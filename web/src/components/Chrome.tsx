@@ -57,7 +57,7 @@ export function SearchBar({ value = '', autoFocus = false }: { value?: string; a
 
 const TABS: { route: Route; label: string; icon: typeof Store; match: string[] }[] = [
   { route: { name: 'home' }, label: 'Productos', icon: Store, match: ['home', 'search', 'deals', 'category'] },
-  { route: { name: 'plan' }, label: 'Cenas', icon: ChefHat, match: ['plan'] },
+  { route: { name: 'plan' }, label: 'Recetas', icon: ChefHat, match: ['plan'] },
   { route: { name: 'basket' }, label: 'Cesta', icon: ShoppingBasket, match: ['basket'] },
   { route: { name: 'stats' }, label: 'Gastos', icon: BarChart3, match: ['stats'] },
   { route: { name: 'settings' }, label: 'Ajustes', icon: Settings, match: ['settings'] },
