@@ -2,7 +2,7 @@
 
 Sistema visual de ListPro 2.0: **súper fresco y luminoso**. Fondo casi negro verdoso (oscuro) o gris verdoso muy claro (claro), tarjetas suaves con borde fino, verde de marca con degradado y brillo, y cristal en lo que flota (buscador, barra de navegación). Cada pasillo tiene su color, icono y descripción, que sirve la API para que web y Android coincidan.
 
-Implementado en `web/src/styles.css` y `android/app/src/main/java/com/listpro/xyon/pro/ui/Theme.kt` + `Components.kt`.
+Implementado en `web/src/styles.css` y, en la app Android ([listproapp](https://github.com/mkandreum/listproapp)), en `app/src/main/java/com/listpro/xyon/pro/ui/Theme.kt` + `Components.kt`.
 
 ## Tokens
 

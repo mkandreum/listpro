@@ -10,13 +10,13 @@
 
 ---
 
-ListPro 2.0 son tres piezas conectadas que comparten catálogo, categorías y cesta:
+ListPro 2.0 son tres piezas conectadas que comparten catálogo, categorías y cesta. Este repositorio tiene el servidor y la web; la app Android nativa vive en su propio repositorio, [mkandreum/listproapp](https://github.com/mkandreum/listproapp).
 
-| Pieza | Carpeta | Stack |
+| Pieza | Dónde | Stack |
 |---|---|---|
 | Servidor + scraper | `server/` | Node 22, Express, SQLite (`node:sqlite`) |
 | Web | `web/` | React 18 + Vite + TypeScript |
-| App Android | `android/` | Kotlin, Jetpack Compose, Material 3, OkHttp, Coil, WorkManager |
+| App Android | [listproapp](https://github.com/mkandreum/listproapp) | Kotlin, Jetpack Compose, Material 3, OkHttp, Coil, WorkManager |
 
 ## Cómo funciona
 
@@ -27,13 +27,22 @@ ListPro 2.0 son tres piezas conectadas que comparten catálogo, categorías y ce
    - `GET /api/catalog/meta` — versión, para saber si hay precios nuevos.
    - `GET /api/products/:id/history` — historial de precio.
    - `POST/GET/PUT /api/lists/:code` — lista compartida por código de 8 caracteres (web ↔ Android ↔ familia).
-   - `GET /api/planner/options`, `POST /api/plans`, `GET /api/plans/:id` — planes de cenas con IA (Gemini) sobre el catálogo real.
+   - `GET /api/planner/options`, `POST /api/plans`, `GET /api/plans/:id`, `POST /api/plans/:id/swap` — planes de recetas con IA (Gemini) sobre el catálogo real, y cambiar una receta suelta.
    - `POST /api/admin/refresh` — fuerza una actualización (`Authorization: Bearer $ADMIN_TOKEN`).
 4. **Web y Android** consumen la misma API: pasillos a color, bajadas de precio, búsqueda, cesta ordenada por pasillos con casillas "en el carro", aviso si un precio cambió desde que lo añadiste, cestas guardadas, gastos y sincronización. Android además comparte la lista **por NFC** acercando dos móviles y refresca los precios en segundo plano.
 
-## Planes de cenas (pestaña Cenas)
+## Recetas con IA (pestaña Recetas)
 
-El usuario indica presupuesto semanal, personas, número de cenas, súper (por ahora Mercadona), dieta, alergias, gustos, lo que ya tiene en casa, tiempo máximo y electrodomésticos. El servidor (`server/src/planner.js`) manda a Gemini esas preferencias y el catálogo de alimentación (~2.000 productos con id y precio) y pide recetas con productos concretos y la fracción de envase que usa cada una. Después **el servidor recalcula todo con los precios reales**: coste por ración, lista de la compra en envases enteros (sumando lo que se comparte entre cenas) y total frente al presupuesto. Si se pasa o faltan cenas, repite una vez explicándole el fallo. La nutrición es una estimación de la IA y así se indica. Límite: 8 planes por hora y dirección IP.
+El usuario elige qué planificar (**desayunos, comidas, meriendas y/o cenas**), cuántos días y personas, presupuesto semanal (la app sugiere uno según lo elegido), súper (por ahora Mercadona), dieta, alergias, gustos, lo que ya tiene en casa, tiempo máximo y electrodomésticos. En web y Android el plan se consulta por secciones desde una barra en píldora que se desliza con el dedo (una página por comida y otra con la lista de la compra).
+
+Cómo lo monta el servidor (`server/src/planner.js`):
+
+1. **Guion de la semana**: antes de llamar a la IA reparte a cada receta una base (pollo, lentejas, merluza, huevos...), un formato (guiso, horno, wok, tortilla...) y un estilo de cocina, sin repetir base en días seguidos ni entre la comida y la cena del mismo día. Solo combina lo que tiene sentido (nada de brochetas de lentejas o guiso de huevo) y el estilo va ligado al formato (el wok es asiático, las fajitas mexicanas); la mayoría de las veces sale cocina casera.
+2. **Una llamada por comida, en paralelo**, cada una con su parte del presupuesto, su catálogo (bollería y cereales solo en desayunos y meriendas), las recetas de las otras comidas para no repetirlas y las del plan anterior al pedir «Otro plan».
+3. El prompt exige **recetas que existan de verdad**, ingredientes que peguen entre sí, cantidades realistas por persona, que todo lo de los pasos esté en los ingredientes, variedad de verduras, guarniciones y salsas, y productos de temporada.
+4. **El servidor recalcula todo con los precios reales**: coste por ración, lista de la compra en envases enteros (sumando lo que se comparte entre recetas) y total frente al presupuesto. Si una comida sale coja o muy cara, solo esa se repite explicándole el fallo.
+
+Cada receta se puede cambiar por otra (`POST /api/plans/:id/swap`, hasta 30 por hora). La nutrición es una estimación de la IA y así se indica. Límite: 8 planes por hora y dirección IP. Los planes antiguos (solo cenas, `nights`) se siguen leyendo.
 
 Para desarrollar sin clave: `PLANNER_MOCK=1 npm start` monta un plan de prueba con productos reales.
 
@@ -46,18 +55,12 @@ cd ../server && npm install && npm run scrape && npm start
 
 Desarrollo de la web con recarga: `npm start` en `server/` (puerto 3000) y `npm run dev` en `web/`.
 
-App Android contra un servidor local en el emulador:
-
-```bash
-cd android && ./gradlew assembleDebug -PapiBase=http://10.0.2.2:3000
-```
-
-Por defecto la app apunta a `https://listpro.xyoncloud.win`. Para probar en un móvil real usa `./gradlew assemblePreview`: es tan rápida como la release (R8, sin depuración), va firmada con la clave de debug y se instala aparte (`com.listpro.xyon.pro.preview`). La build `debug` es mucho más lenta y solo sirve para desarrollar. La firma de release se lee de `~/.android-keys/listpro-keystore.properties`.
+La app Android se compila desde [listproapp](https://github.com/mkandreum/listproapp); contra este servidor en local usa `-PapiBase=http://10.0.2.2:3000`.
 
 ## Desplegar en Coolify
 
 1. En Coolify, crea un recurso nuevo: *Private Repository (GitHub App)* → `mkandreum/listpro`, rama `main`, Build Pack **Docker Compose** (`docker-compose.yaml`).
-2. Variables de entorno: `GEMINI_API_KEY` (la de Puchero/VoltBody; sin ella la pestaña Cenas avisa de que no está disponible) y, opcionales, `GEMINI_MODEL_PLAN`, `GEMINI_MODEL_FAST`, `MERCADONA_WH` (por defecto `mad1`), `SCRAPE_HOUR` (por defecto `6`) y `ADMIN_TOKEN`.
+2. Variables de entorno: `GEMINI_API_KEY` (la de Puchero/VoltBody; sin ella la pestaña Recetas avisa de que no está disponible) y, opcionales, `GEMINI_MODEL_PLAN`, `GEMINI_MODEL_FAST`, `MERCADONA_WH` (por defecto `mad1`), `SCRAPE_HOUR` (por defecto `6`) y `ADMIN_TOKEN`.
 3. Asigna el dominio `listpro.xyoncloud.win` al servicio `app`, puerto **3000**.
 4. Lanza **Deploy**. Al arrancar con la base de datos vacía descarga el catálogo (~1,5 min); después se actualiza cada mañana. La base de datos vive en el volumen `listpro_data` y sobrevive a los redespliegues.
 
@@ -66,25 +69,6 @@ Con el recurso creado y *Auto Deploy* activo, cada push a `main` se redespliega 
 En local: `docker compose up -d --build`.
 
 > ListPro no está afiliada a Mercadona. Los precios se leen de su tienda online pública una vez al día.
-
-## 🗄️ Versión 1.0 (APK descompilado)
-
-Repositorio de **análisis** del APK descompilado, no del proyecto Android original:
-
-```
-01_zip/      Extracto crudo del APK (classes.dex, assets, META-INF)
-02_apktool/  apktool: AndroidManifest.xml decodificado, smali/ y res/
-03_jadx/     JADX: fuentes Java decompiladas + recursos
-RESUMEN.txt  Inventario de archivos del descompilado
-```
-
-### Cómo se regenera
-
-```bash
-unzip com.listpro.xyon.pro-2.apk -d 01_zip
-apktool d com.listpro.xyon.pro-2.apk -o 02_apktool
-jadx -d 03_jadx com.listpro.xyon.pro-2.apk
-```
 
 ## 🏢 Xyon Platforms
 
