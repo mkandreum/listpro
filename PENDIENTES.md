@@ -44,6 +44,7 @@
 - Al arrancar, el servidor scrapea **solo los catálogos nuevos o viejos**; un redeploy con El Corte Inglés recién añadido lo descarga sin repetir Mercadona y Consum.
 - `FORCE_SCRAPE=1` fuerza todos los súpers en el arranque.
 - La pasada diaria de las 6:00 sigue actualizando todos.
+- Un watchdog cada 30 min comprueba que ningún catálogo supere las 20 h; si el proceso estaba caído a las 6:00 o una pasada falló, lo recupera sin esperar al día siguiente.
 
 ## Límites de las APIs
 

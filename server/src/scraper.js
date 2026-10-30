@@ -150,4 +150,31 @@ export function scheduleScraping({ hour = Number(process.env.SCRAPE_HOUR ?? 6), 
     setTimeout(async () => { await runAll(); scheduleNext(); }, wait);
   };
   scheduleNext();
+
+  // Red de seguridad: si el proceso estaba caído a las 6:00 o una pasada falló,
+  // ningún catálogo debe quedarse con más de maxAgeHours.
+  let watchdogBusy = false;
+  const watchdog = setInterval(async () => {
+    if (watchdogBusy) return;
+    const due = STORES.filter((s) => {
+      const last = getMeta(metaKey(s.id, 'catalog_updated_at'));
+      return !last || Date.now() - Date.parse(last) > maxAgeHours * 3600_000;
+    });
+    if (!due.length) return;
+    watchdogBusy = true;
+    console.log(`[scraper] Catálogos con más de ${maxAgeHours} h: ${due.map((s) => s.name).join(', ')}`);
+    try {
+      for (const s of due) {
+        if (isScraping(s.id)) continue;
+        try {
+          await scrapeCatalog(s.id);
+        } catch (e) {
+          console.error(`[scraper] ${s.name}: ${e.message}`);
+        }
+      }
+    } finally {
+      watchdogBusy = false;
+    }
+  }, 30 * 60_000);
+  watchdog.unref?.();
 }
