@@ -42,6 +42,12 @@ async function doScrape(store, log) {
 
   // Si la tienda devuelve algo anómalo (caída parcial), no machacamos el catálogo bueno.
   const previous = db.prepare('SELECT COUNT(*) AS n FROM products WHERE active = 1 AND store = ?').get(store).n;
+  if (meta?.skipped?.length && previous > 0) {
+    throw new Error(`Catálogo incompleto de ${store}: faltan ${meta.skipped.join(', ')}. No se guarda.`);
+  }
+  if (meta?.skipped?.length) {
+    log(`[scraper] ${store}: catálogo incompleto, faltan ${meta.skipped.join(', ')}; se guarda porque no había catálogo previo.`);
+  }
   if (products.length < MIN_PRODUCTS[store] || (previous > 0 && products.length < previous * 0.6)) {
     throw new Error(`Catálogo sospechoso de ${store}: ${products.length} productos (antes ${previous}). No se guarda.`);
   }

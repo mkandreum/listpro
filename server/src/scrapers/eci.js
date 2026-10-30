@@ -142,6 +142,7 @@ export async function fetchCatalog(log = console.log) {
   log('[eci] Empezando');
   const categories = [];
   const products = new Map();
+  const skipped = [];
   const sections = ONLY.length ? SECTIONS.filter((s) => ONLY.includes(s.slug)) : SECTIONS;
   let position = 0;
 
@@ -151,8 +152,9 @@ export async function fetchCatalog(log = console.log) {
     try {
       first = await getJson(path);
     } catch (e) {
-      // Una sección caída no debe tirar el súper entero; el guard de scraper.js
-      // impide guardar un catálogo demasiado incompleto.
+      // Una sección caída no tira el súper entero: se anota y scraper.js decide
+      // si se puede guardar sin ella.
+      skipped.push(source.name);
       log(`[eci] ${source.name}: ${e.message}, se salta`);
       continue;
     }
@@ -247,5 +249,5 @@ export async function fetchCatalog(log = console.log) {
   }
 
   log(`[eci] Listo: ${products.size} productos, ${categories.length} categorías`);
-  return { categories, products: [...products.values()], meta: {} };
+  return { categories, products: [...products.values()], meta: { skipped } };
 }

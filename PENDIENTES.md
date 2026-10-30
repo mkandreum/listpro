@@ -51,6 +51,7 @@
 - ECI: 10 peticiones seguidas a 300 ms dieron 200; una sección de 150 páginas a 350 ms no recibió 429. Aun así, el lector nuevo usa 450 ms + jitter para ~1.000 páginas.
 - Consum: 93 páginas a 350 ms; funciona a diario.
 - Protecciones: una petición a la vez, reintentos con `Retry-After` y backoff exponencial, una pasada diaria fuera de hora punta y el guard que no guarda un catálogo con menos del 60 % del anterior.
+- Si ECI pierde una sección entera y ya había catálogo, la pasada se rechaza y se queda el anterior; si es la primera vez, guarda lo que haya y lo avisa en el log.
 - Alcampo no es un límite: es un reto AWS WAF que aparece a las pocas peticiones.
 
 ## Súpers descartados
