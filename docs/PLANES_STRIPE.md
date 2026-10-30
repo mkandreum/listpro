@@ -16,7 +16,6 @@ panel (Pro o Estándar). Stripe queda para la siguiente fase.
 | Historial de precios | 7 días | Completo |
 | Lista compartida | 2 miembros | 6 miembros |
 | Cestas guardadas | 0 | Ilimitadas |
-| Exportar copia | No | Sí |
 | NFC | No | Sí |
 | Estadísticas avanzadas | No | Sí |
 
