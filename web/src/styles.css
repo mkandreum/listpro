@@ -732,9 +732,10 @@ img { display: block; max-width: 100%; }
 .store-name { display: inline-flex; align-items: center; gap: 7px; font-weight: 700; white-space: nowrap; }
 .store-btn { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 5px 10px 5px 6px; border-radius: 999px; background: var(--surface); border: 1px solid color-mix(in srgb, var(--hue) 45%, var(--line-strong)); box-shadow: var(--shadow-1); color: var(--ink); transition: transform .2s var(--out); }
 .store-btn:active { transform: scale(.95); }
-.store-btn .l { display: grid; text-align: left; line-height: 1.05; min-width: 0; }
+.store-btn { min-width: 0; flex: 0 1 auto; }
+.store-btn .l { display: grid; text-align: left; line-height: 1.05; min-width: 0; overflow: hidden; }
 .store-btn .k { font-size: .64rem; font-weight: 600; color: var(--ink-3); text-transform: uppercase; letter-spacing: .05em; }
-.store-btn b { font-size: .8rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 112px; }
+.store-btn b { display: block; font-size: .8rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 112px; }
 .store-btn > svg { color: var(--ink-3); }
 .pro-tick {
   display: inline-flex; align-items: center; gap: 4px; flex: none; min-height: 30px; padding: 0 9px 0 7px;
