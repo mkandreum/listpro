@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react';
 import { Check, Copy, LogOut, Pencil, Send, UserPlus, Users, X } from 'lucide-react';
 import { inkOn, relativeTime } from '../lib';
 import { initials } from '../share';
-import { createSync, joinSync, leaveSync, toast, upsertMe, useStore, validCode } from '../store';
+import { api } from '../api';
+import { createSync, getState, joinSync, leaveSync, setPendingJoin, toast, upsertMe, useStore, validCode } from '../store';
+import type { InvitePreview } from '../types';
 import type { Member } from '../types';
 import { haptic } from '../fx/haptics';
 import { useSheet } from '../fx/sheet';
@@ -58,11 +60,14 @@ export function SharePill({ onClick }: { onClick: () => void }) {
   );
 }
 
-const inviteLink = (code: string) => `${location.origin}/#/unirse/${code}`;
+// Enlace de verdad (no #): el servidor le pone título para WhatsApp y Android lo abre en la app
+const inviteLink = (code: string) => `${location.origin}/unirse/${code}`;
 
 async function invite(code: string) {
   const url = inviteLink(code);
-  const text = `Únete a nuestra lista de la compra en ListPro. Código: ${code}`;
+  const st = getState();
+  const me = st.members.find((m) => m.id === st.meId)?.name ?? st.auth?.user.name;
+  const text = `${me ? `${me} te invita` : 'Te invito'} a su lista de la compra en ListPro. Abre el enlace y pulsa «Unirme».`;
   try {
     if (navigator.share) { await navigator.share({ title: 'ListPro', text, url }); return; }
   } catch (e) {
@@ -76,12 +81,12 @@ export function ShareSheet({ onClose, joinCode }: { onClose: () => void; joinCod
   const sync = useStore((s) => s.sync);
   return (
     <Sheet onClose={onClose} label="Compartir la cesta" className="share-sheet">
-      {sync.code ? <SharedView code={sync.code} updatedAt={sync.updatedAt} onClose={onClose} /> : <StartView joinCode={joinCode} />}
+      {sync.code ? <SharedView code={sync.code} updatedAt={sync.updatedAt} onClose={onClose} /> : <StartView joinCode={joinCode} onClose={onClose} />}
     </Sheet>
   );
 }
 
-function StartView({ joinCode }: { joinCode?: string }) {
+function StartView({ joinCode, onClose }: { joinCode?: string; onClose: () => void }) {
   const me = useStore((s) => s.members.find((m) => m.id === s.meId));
   const [mode, setMode] = useState<'create' | 'join'>(joinCode ? 'join' : 'create');
   const [name, setName] = useState(me?.name ?? '');
@@ -95,7 +100,7 @@ function StartView({ joinCode }: { joinCode?: string }) {
     setBusy(true);
     try {
       if (mode === 'create') { await createSync(name); toast('Lista compartida creada'); }
-      else { await joinSync(code, name); toast('Ya estás dentro de la lista'); }
+      else { upsertMe(name); setPendingJoin(code.toUpperCase()); onClose(); return; }
       haptic.success();
     } catch (err) {
       haptic.warn();
@@ -183,6 +188,8 @@ function SharedView({ code, updatedAt, onClose }: { code: string; updatedAt: str
         )}
       </ul>
 
+      <JoinOther current={code} onDone={onClose} />
+
       {(!signedIn || members.length > 1) && <div style={{ marginTop: 22 }}>
         {leaving ? (
           <div className="confirm-row">
@@ -197,5 +204,132 @@ function SharedView({ code, updatedAt, onClose }: { code: string; updatedAt: str
         )}
       </div>}
     </>
+  );
+}
+
+/** ¿Te han pasado un código? Para unirse a otra lista aunque ya tengas una. */
+function JoinOther({ current, onDone }: { current: string; onDone: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [code, setCode] = useState('');
+  if (!open) return <button className="link-btn" style={{ marginTop: 14 }} onClick={() => setOpen(true)}><UserPlus size={16} /> Me han pasado un código para unirme a otra lista</button>;
+  const ok = validCode(code) && code !== current;
+  return (
+    <form className="sub-form" style={{ marginTop: 14 }} onSubmit={(e) => { e.preventDefault(); if (!ok) return; setPendingJoin(code); onDone(); }}>
+      <label className="text-field" style={{ marginTop: 0 }}>
+        Código de la otra lista
+        <input className="input code-input num" autoFocus value={code} onChange={(e) => setCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
+          maxLength={8} placeholder="ABCD2345" autoCapitalize="characters" autoComplete="off" spellCheck={false} />
+      </label>
+      {code === current && <span className="small muted">Ese es el código de tu lista.</span>}
+      <button className="btn primary" disabled={!ok}>Ver la invitación</button>
+    </form>
+  );
+}
+
+const joinNames = (p: InvitePreview) => {
+  const n = p.members.map((m) => m.name).filter(Boolean);
+  return n.length === 0 ? 'Alguien' : n.length === 1 ? n[0] : n.length === 2 ? `${n[0]} y ${n[1]}` : `${n[0]}, ${n[1]} y ${n.length - 2} más`;
+};
+
+/** Cabecera de una invitación (también la usa el registro para decir a qué lista te unes). */
+export function InviteHeader({ preview }: { preview: InvitePreview }) {
+  return (
+    <div className="invite-head">
+      <span className="avatar-stack big">{preview.members.slice(0, 4).map((m) => <Avatar key={m.id} m={{ ...m, joinedAt: '' }} size={48} ring />)}</span>
+      <h2 className="share-title">{joinNames(preview)} te invita{preview.members.length > 1 ? 'n' : ''} a su lista</h2>
+      <p className="muted center-text">
+        {preview.products > 0 ? `Su cesta lleva ${preview.products} producto${preview.products > 1 ? 's' : ''}. ` : ''}
+        Veréis la misma cesta al momento, quién coge qué y cuánto os debéis.
+      </p>
+    </div>
+  );
+}
+
+export function useInvitePreview(code: string | null) {
+  const [preview, setPreview] = useState<InvitePreview | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    if (!code) return;
+    let alive = true;
+    setPreview(null); setError(null);
+    api.invite(code).then((p) => alive && setPreview(p)).catch((e) => alive && setError(e.status === 404 ? 'Esta invitación ya no vale: la lista no existe.' : 'No se pudo conectar. Prueba otra vez.'));
+    return () => { alive = false; };
+  }, [code]);
+  return { preview, error };
+}
+
+/** Hoja de invitación: aparece al abrir un enlace /unirse/CODIGO (con cuenta o sin ella) y deja aceptar o no. */
+export function JoinSheet({ code, onJoined }: { code: string; onJoined: () => void }) {
+  const { preview, error } = useInvitePreview(code);
+  const sync = useStore((s) => s.sync);
+  const members = useStore((s) => s.members);
+  const meName = useStore((s) => s.members.find((m) => m.id === s.meId)?.name ?? s.auth?.user.name ?? '');
+  const signedIn = useStore((s) => s.auth != null);
+  const myCount = useStore((s) => Object.keys(s.basket).length);
+  const sharedNow = sync.code != null && members.length > 1;
+  const already = sync.code === code;
+  const [name, setName] = useState(meName);
+  const [bring, setBring] = useState(myCount > 0 && !sharedNow);
+  const [busy, setBusy] = useState(false);
+
+  const decline = () => {
+    setPendingJoin(null);
+    // Con cuenta siempre hay lista: si no tenía, ahora se crea la suya
+    const st = getState();
+    if (st.auth && !st.sync.code) createSync(st.auth.user.name).catch(() => {});
+  };
+  const accept = async () => {
+    if (!name.trim()) return;
+    setBusy(true);
+    try {
+      await joinSync(code, name.trim(), { bringBasket: bring });
+      haptic.success();
+      setPendingJoin(null);
+      toast(preview ? `Ya estás en la lista de ${joinNames(preview)}` : 'Ya estás dentro de la lista');
+      onJoined();
+    } catch (e) {
+      haptic.warn();
+      toast((e as Error).message || 'No se pudo conectar');
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <Sheet onClose={decline} label="Invitación a una lista" className="share-sheet">
+      {error ? (
+        <div className="center-text" style={{ padding: '24px 0' }}>
+          <h2 className="share-title">Invitación no válida</h2>
+          <p className="muted">{error}</p>
+          <button className="btn block" style={{ marginTop: 16 }} onClick={decline}>Entendido</button>
+        </div>
+      ) : !preview ? (
+        <div className="skeleton" style={{ height: 220, marginTop: 10 }} />
+      ) : already ? (
+        <div className="center-text">
+          <InviteHeader preview={preview} />
+          <p className="notice down" style={{ justifyContent: 'center' }}><Check size={18} /> Ya estás en esta lista.</p>
+          <button className="btn primary block cta" onClick={() => { setPendingJoin(null); onJoined(); }}>Ver la cesta</button>
+        </div>
+      ) : (
+        <>
+          <InviteHeader preview={preview} />
+          {!meName && (
+            <label className="text-field">
+              ¿Cómo te llamas?
+              <input className="input" value={name} onChange={(e) => setName(e.target.value)} maxLength={24} placeholder="Así te verán en la lista" autoComplete="given-name" />
+            </label>
+          )}
+          {myCount > 0 && (
+            <label className="check-row">
+              <input type="checkbox" checked={bring} onChange={(e) => { haptic.tick(); setBring(e.target.checked); }} />
+              <span><b>Llevar mi cesta</b><span className="muted small">Tus {myCount} producto{myCount > 1 ? 's' : ''} se añaden a su cesta.</span></span>
+            </label>
+          )}
+          {sharedNow && <p className="notice up small">Dejarás la lista que compartes ahora con {members.filter((m) => m.name !== meName).map((m) => m.name).slice(0, 2).join(' y ')}.</p>}
+          <button className="btn primary block cta" disabled={busy || !name.trim()} onClick={accept}><Check size={20} /> {busy ? 'Uniéndome…' : 'Unirme a la lista'}</button>
+          <button className="btn block" style={{ marginTop: 10 }} onClick={decline}>Ahora no</button>
+          {!signedIn && <p className="muted small center-text" style={{ marginTop: 10 }}>Sin cuenta, la lista solo estará en este dispositivo. Crea una en Ajustes para tenerla también en el móvil.</p>}
+        </>
+      )}
+    </Sheet>
   );
 }

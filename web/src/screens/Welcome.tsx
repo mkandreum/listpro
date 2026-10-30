@@ -5,6 +5,7 @@ import { api } from '../api';
 import { continueAsGuest, finishOnboarding, getState, login, register, setStore, useStore } from '../store';
 import { StoreChoice } from '../components/Stores';
 import { haptic } from '../fx/haptics';
+import { Avatar, useInvitePreview } from '../components/Share';
 
 /** Fotos de producto reales del catálogo para decorar (las que más han bajado, si las hay). */
 function useStickers(n: number) {
@@ -169,6 +170,7 @@ export function AuthScreen() {
   const [name, setName] = useState(() => { const st = getState(); return st.members.find((m) => m.id === st.meId)?.name ?? ''; });
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const pendingJoin = useStore((st) => st.pendingJoin);
   const [invite, setInvite] = useState('');
   const [forgot, setForgot] = useState(false);
   const [show, setShow] = useState(false);
@@ -215,6 +217,7 @@ export function AuthScreen() {
       </section>
 
       <section className="auth-card" aria-label={isNew ? 'Crear cuenta' : 'Entrar'}>
+        <InviteBanner />
         <div className="segmented two-seg" role="tablist">
           <button role="tab" aria-selected={isNew} aria-pressed={isNew} onClick={() => { setMode('register'); setError(null); }}>Soy nuevo</button>
           <button role="tab" aria-selected={!isNew} aria-pressed={!isNew} onClick={() => { setMode('login'); setError(null); }}>Ya tengo cuenta</button>
@@ -245,7 +248,7 @@ export function AuthScreen() {
             </span>
             {isNew && <PasswordMeter value={password} />}
           </label>
-          {isNew && (
+          {isNew && !pendingJoin && (
             <label className="text-field">
               Código de invitación
               <input className="input" value={invite} onChange={(e) => setInvite(e.target.value.toUpperCase().replace(/[^A-Z2-9]/g, '').slice(0, 8))}
@@ -408,5 +411,20 @@ function PasswordMeter({ value }: { value: string }) {
       <span className="meter-bars">{[0, 1, 2, 3].map((n) => <i key={n} className={n < (value.length < 8 ? 1 : score) ? 'on' : ''} />)}</span>
       <span className="small">{label}</span>
     </span>
+  );
+}
+
+/** Si llega desde un enlace de invitación: a qué lista se va a unir en cuanto entre. */
+function InviteBanner() {
+  const code = useStore((s) => s.pendingJoin);
+  const { preview } = useInvitePreview(code);
+  if (!code || !preview) return null;
+  const names = preview.members.map((m) => m.name).filter(Boolean);
+  return (
+    <div className="invite-banner">
+      <span className="avatar-stack">{preview.members.slice(0, 3).map((m) => <Avatar key={m.id} m={{ ...m, joinedAt: '' }} size={34} ring />)}</span>
+      <span><b>{names.length ? `${names.slice(0, 2).join(' y ')} te invita${names.length > 1 ? 'n' : ''} a su lista` : 'Te han invitado a una lista'}</b>
+        <span className="muted small">Crea tu cuenta o entra y te unes en un toque.</span></span>
+    </div>
   );
 }

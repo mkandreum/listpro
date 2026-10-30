@@ -103,3 +103,10 @@ ListPro es un producto desarrollado y mantenido por **Xyon Platforms**, empresa 
 - Rutas: `POST /api/auth/register`, `POST /api/auth/login`, `GET/PUT/DELETE /api/me`, `PUT /api/me/password`, `POST /api/auth/logout-all`.
 - `JWT_SECRET` es opcional: si no está, el servidor genera uno y lo guarda en la base de datos del volumen.
 - La primera vez la app enseña una presentación de tres pasos y luego pide crear cuenta o entrar; se puede seguir sin cuenta.
+
+## Invitaciones a una lista y app en iPhone
+
+- **Invitar**: el enlace es `https://listpro.xyoncloud.win/unirse/CODIGO`. Al abrirlo (con cuenta o sin ella) sale una hoja con quién te invita y cuántos productos lleva la cesta, y se acepta o no. La invitación se guarda durante la presentación y el registro, y vale también como invitación para crear la cuenta si en la lista hay alguien registrado.
+- Quien ya tiene lista puede unirse a otra (desde el enlace o con el código en Compartir) y elegir si se lleva su cesta.
+- **Android** abre esos enlaces directamente en la app. El servidor publica `/.well-known/assetlinks.json`; para la build de release hay que poner su huella en `ANDROID_CERT_SHA256` (la de la build preview ya va incluida).
+- **iPhone/iPad**: la web se puede añadir a la pantalla de inicio y se abre a pantalla completa (iconos PNG, pantallas de arranque claras y oscuras y metadatos de Apple). Un banner explica los pasos en Safari; en Android Chrome muestra un botón de instalar. También está en Ajustes.

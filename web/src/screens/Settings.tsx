@@ -1,5 +1,5 @@
 import { useState as useLocalState } from 'react';
-import { BadgeCheck, ChevronRight, Copy, KeyRound, LogOut, MonitorSmartphone, Pencil, Trash2, UserRound, Users } from 'lucide-react';
+import { BadgeCheck, ChevronRight, Copy, Download, KeyRound, LogOut, MonitorSmartphone, Pencil, Trash2, UserRound, Users } from 'lucide-react';
 import { Avatar } from '../components/Share';
 import { StoreDot, StoreName, StoreSheet } from '../components/Stores';
 import { href } from '../router';
@@ -8,6 +8,7 @@ import {
   type ThemePref,
 } from '../store';
 import { haptic } from '../fx/haptics';
+import { installKind, openInstall } from '../components/Install';
 
 export function Settings() {
   const sync = useStore((s) => s.sync);
@@ -32,6 +33,13 @@ export function Settings() {
     <>
       <h1 className="h-section" style={{ marginTop: 6 }}>Ajustes</h1>
       <AccountPanel />
+      {installKind() && (
+        <button className="share-promo" onClick={openInstall} style={{ marginTop: 16 }}>
+          <span className="art" style={{ background: 'var(--grad)' }}><Download size={22} /></span>
+          <span><b>Instalar como app</b><span className="muted small">En la pantalla de inicio, a pantalla completa y a un toque</span></span>
+          <ChevronRight className="chev" aria-hidden />
+        </button>
+      )}
 
       <a className="share-promo" href={href({ name: 'basket', join: '' })} style={{ marginTop: 16 }}>
         <span className="art"><Users size={22} /></span>

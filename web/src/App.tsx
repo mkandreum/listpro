@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useState } from 'react';
 import { WifiOff } from 'lucide-react';
-import { parse, useHash } from './router';
-import { checkCatalogUpdate, flushSync, loadBasketCatalogs, loadCatalog, loadStores, pullSync, refreshAccount, useStore } from './store';
+import { navigate, parse, useHash } from './router';
+import { checkCatalogUpdate, finishOnboarding, flushSync, setPendingJoin, loadBasketCatalogs, loadCatalog, loadStores, pullSync, refreshAccount, useStore } from './store';
 import { AuthScreen, Onboarding, ResetPassword } from './screens/Welcome';
 import { haptic } from './fx/haptics';
 import type { Product } from './types';
 import { Empty, NavBar, SearchBar, Toasts, TopBar } from './components/Chrome';
 import { ProductSheet } from './components/ProductSheet';
+import { JoinSheet } from './components/Share';
+import { InstallBanner } from './components/Install';
 import { Home } from './screens/Home';
 import { CategoryScreen } from './screens/Category';
 import { Results } from './screens/Results';
@@ -36,6 +38,14 @@ export function App() {
   const catalogError = useStore((s) => s.catalogError);
   const onboarded = useStore((s) => s.onboarded);
   const needsAuth = useStore((s) => !s.auth && !s.guest);
+  const pendingJoin = useStore((s) => s.pendingJoin);
+
+  // Un enlace de invitación abierto con la app ya cargada (#/unirse/CODIGO) también va a la hoja de invitación
+  useEffect(() => {
+    if (route.name === 'basket' && route.join) { setPendingJoin(route.join); navigate({ name: 'basket' }, true); }
+  }, [route]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Quien llega con una invitación no tiene que pasar por la presentación
+  useEffect(() => { if (pendingJoin && !onboarded) finishOnboarding(); }, [pendingJoin, onboarded]);
   const store = useStore((s) => s.store);
   const stores = useStore((s) => s.stores);
   const hue = stores.find((s) => s.id === store)?.hue
@@ -102,7 +112,7 @@ export function App() {
 
   // El enlace del correo debe abrirse aunque el dispositivo no haya pasado la presentación.
   if (route.name === 'reset') return <ResetPassword token={route.token} />;
-  if (!onboarded) return <Onboarding />;
+  if (!onboarded && !pendingJoin) return <Onboarding />;
   if (needsAuth) return <AuthScreen />;
 
   return (
@@ -113,6 +123,8 @@ export function App() {
         {screen}
       </main>
       <NavBar current={route.name} />
+      {pendingJoin && onboarded && <JoinSheet code={pendingJoin} onJoined={() => navigate({ name: 'basket' })} />}
+      <InstallBanner />
       <Toasts />
       {open && <ProductSheet p={open} onClose={onClose} />}
     </div>

@@ -58,6 +58,8 @@ export interface State {
   onboarded: boolean;
   /** Eligió seguir sin cuenta. */
   guest: boolean;
+  /** Invitación a una lista abierta desde un enlace y aún sin aceptar ni rechazar. */
+  pendingJoin: string | null;
 }
 
 function load<T>(key: string, fallback: T): T {
@@ -95,7 +97,22 @@ let state: State = {
   auth: savedAuth,
   onboarded: load('listproOnboarded', false),
   guest: load('listproGuest', false),
+  pendingJoin: captureInvite() ?? load<string | null>('listproPendingJoin', null),
 };
+
+/**
+ * El enlace de invitación (/unirse/CODIGO, o el antiguo #/unirse/CODIGO) se guarda nada más abrir, antes de la
+ * presentación y del registro, para no perderlo por el camino. La URL se limpia para no volver a dispararlo.
+ */
+function captureInvite(): string | null {
+  if (typeof location === 'undefined') return null;
+  const m = /^\/unirse\/([A-Za-z2-9]{8})\/?$/.exec(location.pathname) ?? /^#\/unirse\/([A-Za-z2-9]{8})/.exec(location.hash);
+  if (!m) return null;
+  const code = m[1].toUpperCase();
+  try { localStorage.setItem('listproPendingJoin', JSON.stringify(code)); } catch { /* sin almacenamiento */ }
+  history.replaceState(null, '', '/#/cesta');
+  return code;
+}
 
 const listeners = new Set<() => void>();
 function set(patch: Partial<State>) {
@@ -597,23 +614,44 @@ export async function createSync(name: string) {
 
 export const validCode = (raw: string) => /^[A-Z2-9]{8}$/.test(raw.trim().toUpperCase());
 
-/** Me uno a la lista de otro: me quedo con su cesta, junto las compras guardadas y me apunto. */
-export async function joinSync(raw: string, name: string) {
+/**
+ * Me uno a la lista de otro: me quedo con su cesta, junto las compras guardadas y me apunto.
+ * Con `bringBasket`, lo que yo tenía en la cesta se suma a la suya (sin duplicar: la cantidad mayor).
+ */
+export async function joinSync(raw: string, name: string, opts: { bringBasket?: boolean } = {}) {
   const code = raw.trim().toUpperCase();
   if (!validCode(code)) throw new Error('El código tiene 8 letras y números');
   if (code === state.sync.code) return;
   const remote = await api.getList(code).catch((e) => {
-    throw new Error(e.status === 404 ? 'No existe ninguna lista con ese código' : 'No se pudo conectar');
+    throw new Error(e.status === 404 ? 'Esa lista ya no existe' : 'No se pudo conectar');
   });
   const mine = new Set(remote.data.savedBaskets?.map((b) => b.id));
-  applyRemote({
+  const merged: ListData = {
     ...remote.data,
     savedBaskets: [...(remote.data.savedBaskets ?? []), ...state.savedBaskets.filter((b) => !mine.has(b.id))].sort((a, b) => a.date.localeCompare(b.date)),
-  });
+  };
+  const brought = opts.bringBasket ? { ...state.basket } : null;
+  const broughtPrices = { ...state.addedPrices };
+  if (brought) {
+    merged.basket = { ...(remote.data.basket ?? {}) };
+    merged.addedPrices = { ...(remote.data.addedPrices ?? {}) };
+    merged.addedBy = { ...(remote.data.addedBy ?? {}) };
+    for (const [id, q] of Object.entries(brought)) {
+      merged.basket[id] = Math.max(merged.basket[id] ?? 0, q);
+      merged.addedPrices[id] ??= broughtPrices[id] ?? 0;
+      if (state.meId) merged.addedBy[id] ??= state.meId;
+    }
+  }
+  applyRemote(merged);
   setBase(remote.data);
-  setSync({ code, updatedAt: remote.updatedAt, dirty: false });
+  setSync({ code, updatedAt: remote.updatedAt, dirty: !!brought });
   upsertMe(name);
   linkAccountList(code);
+}
+
+export function setPendingJoin(code: string | null) {
+  set({ pendingJoin: code });
+  save('listproPendingJoin', code);
 }
 
 export function leaveSync() {
@@ -692,6 +730,8 @@ async function adoptSession(s: Session) {
   set({ guest: false });
   save('listproGuest', false);
   const code = s.user.listCode;
+  // Viene de una invitación y aún no tiene lista: no le creamos una, se la ofrece la hoja de invitación
+  if (state.pendingJoin && !code && !state.sync.code) { upsertMe(s.user.name); return; }
   if (code && code !== state.sync.code) {
     try { await joinSync(code, s.user.name); return; } catch { /* la lista ya no existe: abajo se crea otra */ }
   }
@@ -700,7 +740,7 @@ async function adoptSession(s: Session) {
 }
 
 export async function register(name: string, email: string, password: string, store?: string, invite?: string) {
-  const s = await api.register({ name, email, password, memberId: state.meId, listCode: state.sync.code, store: store ?? state.store, invite });
+  const s = await api.register({ name, email, password, memberId: state.meId, listCode: state.sync.code, store: store ?? state.store, invite, joinCode: state.pendingJoin });
   await adoptSession(s);
 }
 
@@ -753,7 +793,9 @@ export async function refreshAccount() {
     setAuth({ ...a, user });
     // La cuenta manda: si en otro dispositivo se cambió de lista o de súper, este se pone igual
     const code = state.sync.code;
-    if (user.listCode && user.listCode !== code) await joinSync(user.listCode, user.name).catch(() => {});
+    // Con una invitación pendiente, la lista la decide el usuario en la hoja de invitación
+    if (state.pendingJoin) { /* nada */ }
+    else if (user.listCode && user.listCode !== code) await joinSync(user.listCode, user.name).catch(() => {});
     else if (!user.listCode && !code) await createSync(user.name).catch(() => {});
     else if (!user.listCode && code) linkAccountList(code);
     if (user.store && user.store !== state.store) await setStore(user.store, false).catch(() => {});

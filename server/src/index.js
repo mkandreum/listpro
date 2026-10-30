@@ -1,6 +1,7 @@
 import express from 'express';
 import compression from 'compression';
 import crypto from 'node:crypto';
+import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { db, getMeta, setMeta } from './db.js';
@@ -140,6 +141,36 @@ app.get('/api/lists/:code', (req, res) => {
   res.set('Cache-Control', 'no-store').json({ code, data: JSON.parse(row.data), updatedAt: row.updated_at });
 });
 
+/** Primera cuenta registrada que está en una lista (quien invita al compartirla). */
+function listAccount(code) {
+  const row = db.prepare('SELECT data FROM lists WHERE code = ?').get(code);
+  if (!row) return null;
+  const members = JSON.parse(row.data).members ?? [];
+  for (const m of members) { const u = typeof m?.id === 'string' ? findById(m.id) : null; if (u) return u; }
+  return null;
+}
+
+// Vista previa de una invitación: quién está en la lista y cuántos productos lleva (sin el resto de datos)
+function invitePreview(code) {
+  const row = db.prepare('SELECT data, updated_at FROM lists WHERE code = ?').get(code);
+  if (!row) return null;
+  const data = JSON.parse(row.data);
+  return {
+    code,
+    members: (Array.isArray(data.members) ? data.members : []).slice(0, 12).map((m) => ({ id: m.id, name: String(m.name ?? '').slice(0, 24), hue: m.hue })),
+    products: Object.keys(data.basket ?? {}).length,
+    updatedAt: row.updated_at,
+  };
+}
+
+app.get('/api/lists/:code/invite', (req, res) => {
+  const code = req.params.code.toUpperCase();
+  if (!CODE_RE.test(code)) return res.status(400).json({ error: 'Código inválido' });
+  const p = invitePreview(code);
+  if (!p) return res.status(404).json({ error: 'Esta invitación ya no vale: la lista no existe' });
+  res.set('Cache-Control', 'no-store').json(p);
+});
+
 // Última escritura gana; si el cliente manda baseUpdatedAt y alguien escribió después, se avisa con 409.
 app.put('/api/lists/:code', (req, res) => {
   const code = req.params.code.toUpperCase();
@@ -204,7 +235,11 @@ app.post('/api/auth/register', registerLimit, async (req, res) => {
   const inviter = invite ? findInvite(invite) : null;
   // La primera cuenta de una instalación nueva puede crearse sin invitación.
   const bootstrap = db.prepare('SELECT COUNT(*) AS n FROM users').get().n === 0;
-  if (mode === 'invite' && !inviter && !bootstrap)
+  // Un enlace para unirse a la lista de alguien también vale de invitación, si en esa lista hay una cuenta de verdad
+  // (si no, cualquiera podría crear una lista vacía y saltarse las invitaciones)
+  const joinCode = String(req.body?.joinCode ?? '').trim().toUpperCase();
+  const listInviter = !inviter && CODE_RE.test(joinCode) ? listAccount(joinCode) : null;
+  if (mode === 'invite' && !inviter && !listInviter && !bootstrap)
     return res.status(403).json({ error: 'Necesitas una invitación válida para crear la cuenta.', code: 'INVITE_REQUIRED' });
   if (invite && !inviter)
     return res.status(400).json({ error: 'Ese código de invitación no es válido o ya se ha usado.', code: 'INVALID_INVITE' });
@@ -215,7 +250,7 @@ app.post('/api/auth/register', registerLimit, async (req, res) => {
     const u = createUser({
       id: req.body?.memberId, name, email, passwordHash: await hashPassword(password),
       listCode: listExists(listCode) ? listCode : null, store: isStore(req.body?.store) ? req.body.store : null,
-      plan, invitedBy: inviter?.id ?? null,
+      plan, invitedBy: inviter?.id ?? listInviter?.id ?? null,
     });
     if (inviter) consumeInvite(invite, new Date().toISOString());
     session(res, u, 201);
@@ -488,6 +523,33 @@ app.post('/api/admin/refresh', requireAdmin, (req, res) => {
 });
 
 app.use(compression());
+
+// Android abre los enlaces de invitación directamente en la app si este fichero lo autoriza.
+// ANDROID_CERT_SHA256: huellas SHA-256 de la firma de release (separadas por comas). La de debug va siempre
+// para la build "preview".
+const DEBUG_CERT = '77:4A:7F:72:33:A8:D7:25:52:F1:E5:25:DF:2A:B8:32:B2:98:70:86:D9:17:53:7C:A3:C0:17:97:8B:3B:96:16';
+app.get('/.well-known/assetlinks.json', (_req, res) => {
+  const certs = [...(process.env.ANDROID_CERT_SHA256 ?? '').split(',').map((x) => x.trim().toUpperCase()).filter(Boolean), DEBUG_CERT];
+  res.json(['com.listpro.xyon.pro', 'com.listpro.xyon.pro.preview'].map((pkg) => ({
+    relation: ['delegate_permission/common.handle_all_urls'],
+    target: { namespace: 'android_app', package_name: pkg, sha256_cert_fingerprints: certs },
+  })));
+});
+
+// Enlace de invitación (https://.../unirse/CODIGO): la misma web, con un título que se ve bien al pegarlo en WhatsApp
+const escapeHtml = (v) => String(v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+app.get('/unirse/:code', (req, res, next) => {
+  let html;
+  try { html = fs.readFileSync(path.join(publicDir, 'index.html'), 'utf8'); } catch { return next(); }
+  const code = String(req.params.code).toUpperCase();
+  const p = CODE_RE.test(code) ? invitePreview(code) : null;
+  const who = p?.members.map((m) => m.name).filter(Boolean) ?? [];
+  const title = who.length ? `${who.slice(0, 2).join(' y ')} te invita${who.length > 1 ? 'n' : ''} a su lista de la compra` : 'Te han invitado a una lista de la compra';
+  const desc = 'Únete en ListPro: la misma cesta al momento, quién coge qué y cuánto os debéis.';
+  const meta = `<meta property="og:title" content="${escapeHtml(title)}"><meta property="og:description" content="${escapeHtml(desc)}"><meta property="og:image" content="/icons/icon-512.png"><meta name="twitter:card" content="summary">`;
+  res.set('Cache-Control', 'no-store').type('html').send(html.replace('</head>', `${meta}</head>`).replace('<title>ListPro</title>', `<title>${escapeHtml(title)}</title>`));
+});
+
 app.use(express.static(publicDir, {
   setHeaders(res, file) {
     if (file.endsWith('.html') || file.endsWith('sw.js') || file.endsWith('manifest.webmanifest')) {

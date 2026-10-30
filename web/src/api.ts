@@ -1,4 +1,4 @@
-import type { Alternatives, BasketCost, Catalog, Cheaper, Comparison, ListData, MealPlan, PlanPrefs, PlannerOptions, PriceHistory, Session, StoreInfo, User } from './types';
+import type { InvitePreview, Alternatives, BasketCost, Catalog, Cheaper, Comparison, ListData, MealPlan, PlanPrefs, PlannerOptions, PriceHistory, Session, StoreInfo, User } from './types';
 
 const BASE = import.meta.env.VITE_API_BASE ?? '';
 
@@ -22,7 +22,7 @@ async function friendly<T>(res: Response): Promise<T> {
 }
 
 export const api = {
-  register: (b: { name: string; email: string; password: string; memberId?: string | null; listCode?: string | null; store?: string; invite?: string }) =>
+  register: (b: { name: string; email: string; password: string; memberId?: string | null; listCode?: string | null; store?: string; invite?: string; joinCode?: string | null }) =>
     send('POST', '/api/auth/register', b).then((r) => friendly<Session>(r)),
   login: (email: string, password: string) => send('POST', '/api/auth/login', { email, password }).then((r) => friendly<Session>(r)),
   forgot: (email: string) => send('POST', '/api/auth/forgot', { email }).then((r) => json<{ ok: boolean; message: string }>(r)),
@@ -48,6 +48,7 @@ export const api = {
   createList: (data: ListData) =>
     fetch(`${BASE}/api/lists`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ data }) })
       .then((r) => json<{ code: string; updatedAt: string }>(r)),
+  invite: (code: string) => fetch(`${BASE}/api/lists/${code}/invite`, { cache: 'no-store' }).then((r) => json<InvitePreview>(r)),
   getList: (code: string) =>
     fetch(`${BASE}/api/lists/${code}`, { cache: 'no-store' }).then((r) => json<{ code: string; data: ListData; updatedAt: string }>(r)),
   putList: (code: string, data: ListData, baseUpdatedAt: string | null, force = false) => {

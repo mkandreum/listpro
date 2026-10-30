@@ -1,8 +1,8 @@
 // Service worker: la app abre sin red con el último catálogo descargado.
 // La navegación va a red primero para que un redeploy se vea al instante.
-const SHELL = 'listpro-shell-v3';
+const SHELL = 'listpro-shell-v4';
 const DATA = 'listpro-data-v1';
-const SHELL_FILES = ['/', '/index.html', '/manifest.webmanifest', '/icons/icon.svg'];
+const SHELL_FILES = ['/', '/index.html', '/manifest.webmanifest', '/icons/icon.svg', '/icons/apple-touch-icon-180.png', '/icons/icon-192.png'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(SHELL).then((c) => c.addAll(SHELL_FILES)).then(() => self.skipWaiting()));

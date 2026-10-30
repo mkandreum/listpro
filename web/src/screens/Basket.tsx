@@ -42,8 +42,8 @@ export function Basket({ onOpen, join }: { onOpen: (p: Product) => void; join?: 
   const member = (id?: string) => members.find((m) => m.id === id);
   const showWho = shared && members.length > 1;
 
-  // Enlace de invitación (#/unirse/CODIGO): abre la hoja con el código ya puesto
-  useEffect(() => { if (join !== undefined) setSharing(true); }, [join]);
+  // #/compartir (desde Ajustes) abre la hoja de compartir; las invitaciones (#/unirse/...) las lleva App
+  useEffect(() => { if (join === '') setSharing(true); }, [join]);
   const closeShare = () => { setSharing(false); if (join !== undefined) navigate({ name: 'basket' }, true); };
 
   // Una cesta por súper: el activo primero y luego los demás que tengan algo
@@ -201,7 +201,7 @@ export function Basket({ onOpen, join }: { onOpen: (p: Product) => void; join?: 
         </button>
       )}
 
-      {sharing && <ShareSheet onClose={closeShare} joinCode={join || undefined} />}
+      {sharing && <ShareSheet onClose={closeShare} />}
       {altLine && <AlternativesSheet line={{ p: altLine.p, qty: basket[altLine.p.id] ?? altLine.qty }} a={alts[altLine.p.id]} onClose={() => setAltLine(null)} />}
       {showSavings && <SavingsSheet savings={savings} onOpenLine={(l) => { setShowSavings(false); setAltLine(l); }} onClose={() => setShowSavings(false)} />}
       {checkout && <CheckoutSheet store={multi ? tab : undefined} onClose={() => setCheckout(false)} />}

@@ -22,6 +22,9 @@ services:
       GEMINI_MODEL_FAST: ${GEMINI_MODEL_FAST:-gemini-3.5-flash-lite}
       # Firma de las sesiones de usuario. Opcional: si falta, se genera una y se guarda en la base de datos
       JWT_SECRET: ${JWT_SECRET:-}
+      # Huella SHA-256 de la firma de release de la app Android (keytool -list -v): para que los enlaces
+      # de invitación (/unirse/CODIGO) se abran directamente en la app. La de la build preview ya va incluida
+      ANDROID_CERT_SHA256: ${ANDROID_CERT_SHA256:-}
     volumes:
       - listpro_data:/data
     healthcheck:

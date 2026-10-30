@@ -304,3 +304,11 @@ export interface Session {
   token: string;
   user: User;
 }
+
+/** Lo que se ve de una lista antes de unirse: quién está y cuántos productos lleva. */
+export interface InvitePreview {
+  code: string;
+  members: { id: string; name: string; hue: string }[];
+  products: number;
+  updatedAt: string;
+}

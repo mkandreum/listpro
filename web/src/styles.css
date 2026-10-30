@@ -882,3 +882,32 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 .chip, .segmented button, .store-tile { transition: transform .16s var(--glide), background .2s, color .2s, border-color .2s; }
 .line .check-hit:active .check { transform: scale(.85); }
 .check { transition: background .2s, border-color .2s, transform .18s var(--glide); }
+
+/* ───────────── Invitaciones ───────────── */
+.invite-head { display: grid; justify-items: center; gap: 4px; margin-top: 8px; }
+.avatar-stack.big .avatar + .avatar { margin-left: -14px; }
+.invite-head .avatar-stack { margin-bottom: 6px; animation: rise .55s var(--glide) backwards; }
+.check-row { display: flex; gap: 12px; align-items: flex-start; margin-top: 16px; padding: 14px; border-radius: 16px; background: var(--surface-2); cursor: pointer; }
+.check-row input { width: 22px; height: 22px; margin-top: 2px; accent-color: var(--green); flex: none; }
+.check-row > span { display: grid; gap: 2px; }
+.invite-banner { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; padding: 12px 14px; border-radius: 18px; background: var(--green-soft); border: 1px solid color-mix(in srgb, var(--green-hi) 40%, transparent); animation: rise .5s var(--glide) backwards; }
+.invite-banner > span:last-child { display: grid; gap: 2px; }
+
+/* ───────────── Instalar como app ───────────── */
+.install { position: fixed; z-index: 70; left: 50%; bottom: calc(var(--nav-h) + 24px + env(safe-area-inset-bottom)); width: min(calc(100% - 24px), 440px); translate: -50% 0; padding: 16px; border-radius: 24px; background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow-2), 0 20px 50px rgba(0, 0, 0, .18); animation: install-in .6s var(--glide); }
+.install.top { bottom: auto; top: calc(14px + env(safe-area-inset-top)); animation-name: install-in-top; }
+@keyframes install-in { from { opacity: 0; translate: -50% 30px; scale: .96; } }
+@keyframes install-in-top { from { opacity: 0; translate: -50% -30px; scale: .96; } }
+.install-x { position: absolute; top: 8px; right: 8px; width: 36px; height: 36px; }
+.install-head { display: flex; gap: 12px; align-items: center; padding-right: 30px; margin-bottom: 12px; }
+.install-head img { width: 52px; height: 52px; border-radius: 14px; flex: none; box-shadow: var(--glow); }
+.install-head div { display: grid; gap: 2px; }
+.install-head b { font-family: var(--display); font-size: 1.05rem; letter-spacing: -.02em; }
+.install-steps { list-style: none; display: grid; gap: 8px; counter-reset: s; }
+.install-steps li { counter-increment: s; display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 14px; background: var(--surface-2); font-size: .92rem; animation: rise .5s var(--out) backwards; }
+.install-steps li:nth-child(2) { animation-delay: .08s; }
+.install-steps li:nth-child(3) { animation-delay: .16s; }
+.install-steps .key { width: 32px; height: 32px; flex: none; display: grid; place-items: center; border-radius: 9px; background: var(--surface); color: #007AFF; border: 1px solid var(--line); }
+/* En iPhone la barra de Safari está abajo: una flecha que late señala hacia ella */
+.install-arrow { position: absolute; left: 50%; bottom: -12px; width: 22px; height: 22px; translate: -50% 0; rotate: 45deg; background: var(--surface); border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); animation: nudge 1.4s ease-in-out infinite; }
+@keyframes nudge { 50% { translate: -50% 5px; } }
