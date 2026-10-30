@@ -266,7 +266,15 @@ app.post('/api/admin/refresh', (req, res) => {
 app.use(compression());
 app.use(express.static(publicDir, {
   setHeaders(res, file) {
-    if (file.endsWith('.html') || file.endsWith('sw.js')) res.set('Cache-Control', 'no-cache');
+    if (file.endsWith('.html') || file.endsWith('sw.js') || file.endsWith('manifest.webmanifest')) {
+      // El HTML y el service worker no se cachean: un redeploy se ve al instante.
+      res.set('Cache-Control', 'no-store, must-revalidate');
+    } else if (file.includes(`${path.sep}assets${path.sep}`)) {
+      // Vite pone un hash en el nombre: estos sí pueden cachearse para siempre.
+      res.set('Cache-Control', 'public, max-age=31536000, immutable');
+    } else {
+      res.set('Cache-Control', 'public, max-age=3600');
+    }
   },
 }));
 

@@ -32,6 +32,13 @@
 
 - **Hipercor** opcional: activar como segunda tienda ECI si se acepta el coste de otras ~1.000 páginas/día.
 
+## Caché tras redeploy
+
+- `index.html`, `sw.js` y `manifest.webmanifest` se sirven con `no-store`; los assets con hash de Vite, `immutable` durante un año.
+- Service worker v3: navegación y HTML a red primero; assets con hash, caché primero; `skipWaiting` + `clients.claim`.
+- La app registra el SW con `updateViaCache: 'none'`, fuerza `reg.update()` en cada carga y recarga una vez cuando toma el control una versión nueva.
+- Mercadona no salía en la prueba local porque la base solo tenía Consum y ECI y `/api/stores` oculta los súpers con 0 productos. Ya está scrapeado (4.329 productos) y aparece.
+
 ## Redeploy
 
 - Al arrancar, el servidor scrapea **solo los catálogos nuevos o viejos**; un redeploy con El Corte Inglés recién añadido lo descarga sin repetir Mercadona y Consum.
