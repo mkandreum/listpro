@@ -692,8 +692,8 @@ async function adoptSession(s: Session) {
   await createSync(s.user.name);
 }
 
-export async function register(name: string, email: string, password: string, store?: string) {
-  const s = await api.register({ name, email, password, memberId: state.meId, listCode: state.sync.code, store: store ?? state.store });
+export async function register(name: string, email: string, password: string, store?: string, invite?: string) {
+  const s = await api.register({ name, email, password, memberId: state.meId, listCode: state.sync.code, store: store ?? state.store, invite });
   await adoptSession(s);
 }
 

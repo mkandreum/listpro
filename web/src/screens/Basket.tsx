@@ -78,6 +78,7 @@ export function Basket({ onOpen, join }: { onOpen: (p: Product) => void; join?: 
   // Coste aproximado de la misma cesta en los demás súper
   const [basketCost, setBasketCost] = useState<BasketCost | null>(null);
   const basketKey = lines.map((l) => `${l.p.id}:${l.qty}`).join(',');
+  const otherCosts = (basketCost?.stores ?? []).filter((s) => s.id !== tab && s.matched > 0);
   useEffect(() => {
     if (!basketKey) { setBasketCost(null); return; }
     let alive = true;
@@ -192,13 +193,13 @@ export function Basket({ onOpen, join }: { onOpen: (p: Product) => void; join?: 
               <p className="muted small" style={{ marginTop: 8 }}>«Parecido» compara por precio por kilo o litro. Al mover, la cantidad se mantiene.</p>
             </div>
           )}
-          {basketCost && basketCost.stores.length > 1 && (
+          {basketCost && otherCosts.length > 0 && (
             <section className="panel basket-cost" aria-label="Coste aproximado en otros súper">
               <div className="basket-cost-head">
                 <h2>Coste en otros súper</h2>
                 <span className="muted small">Aproximado</span>
               </div>
-              {basketCost.stores.filter((s) => s.id !== tab).map((s) => {
+              {otherCosts.map((s) => {
                 const diff = s.total - total;
                 return (
                   <div className="basket-cost-row" key={s.id}>

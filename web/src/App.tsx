@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { WifiOff } from 'lucide-react';
 import { parse, useHash } from './router';
 import { checkCatalogUpdate, loadBasketCatalogs, loadCatalog, loadStores, pullSync, refreshAccount, useStore } from './store';
-import { AuthScreen, Onboarding } from './screens/Welcome';
+import { AuthScreen, Onboarding, ResetPassword } from './screens/Welcome';
 import { haptic } from './fx/haptics';
 import type { Product } from './types';
 import { Empty, NavBar, SearchBar, Toasts, TopBar } from './components/Chrome';
@@ -16,7 +16,7 @@ import { Settings } from './screens/Settings';
 import { PlanScreen } from './screens/Plan';
 
 const CATALOG_POLL_MS = 10 * 60_000;
-const SYNC_POLL_MS = 10_000;
+const SYNC_POLL_MS = 4_000;
 
 function useTheme() {
   const pref = useStore((s) => s.theme);
@@ -91,9 +91,12 @@ export function App() {
       case 'basket': screen = <Basket onOpen={onOpen} join={route.join} />; break;
       case 'stats': screen = <Stats />; break;
       case 'settings': screen = <Settings />; break;
+      case 'reset': screen = <ResetPassword token={route.token} />; break;
     }
   }
 
+  // El enlace del correo debe abrirse aunque el dispositivo no haya pasado la presentación.
+  if (route.name === 'reset') return <ResetPassword token={route.token} />;
   if (!onboarded) return <Onboarding />;
   if (needsAuth) return <AuthScreen />;
 

@@ -7,7 +7,7 @@ import { sectionIdFor } from './taxonomy.js';
 //   "similar" — mismo pasillo, nombre parecido y formato parecido. Hace falta porque las marcas
 //               blancas (Hacendado, Consum...) solo existen en su súper; se compara por €/kg o €/l.
 
-const STOP = new Set(['de', 'del', 'la', 'el', 'los', 'las', 'con', 'sin', 'y', 'e', 'en', 'para', 'al', 'a', 'o', 'u', 'un', 'una', 'x', 'pack', 'bandeja', 'bolsa', 'brik', 'botella', 'lata', 'tarro', 'bote', 'paquete', 'caja', 'malla', 'pieza', 'granel', 'unidad', 'ud', 'uds', 'g', 'gr', 'kg', 'ml', 'cl', 'l', 'lt']);
+const STOP = new Set(['de', 'del', 'la', 'el', 'los', 'las', 'con', 'sin', 'y', 'e', 'en', 'para', 'al', 'a', 'o', 'u', 'un', 'una', 'x', 'pack', 'bandeja', 'bolsa', 'brik', 'botella', 'lata', 'tarro', 'bote', 'paquete', 'caja', 'malla', 'pieza', 'granel', 'unidad', 'ud', 'uds', 'g', 'gr', 'kg', 'ml', 'cl', 'l', 'lt', 'pro', 'plus', 'original', 'clasico', 'classic', 'nuevo', 'new', 'edicion', 'limitada']);
 // Marcas propias: no dicen qué es el producto y nunca coinciden entre súper
 const OWN_BRANDS = ['hacendado', 'deliplus', 'bosque verde', 'compy', 'consum', 'kyrell', 'casa juncal', 'el corte ingles', 'hipercor'];
 const MIN_SIMILAR = 0.5;
@@ -86,11 +86,21 @@ const weightOf = (set) => { let w = 0; for (const t of set) w += weight(t); retu
 
 function similarity(a, b) {
   if (a.section !== b.section) return 0;
-  // Tiene que ser el mismo tipo de producto, mirado desde los dos lados: una crema de manos no es un
-  // desodorante en crema, ni un tomate frito con aceite de oliva es aceite de oliva
-  if (!a.head || !b.head || !b.tokens.has(a.head) || !a.tokens.has(b.head)) return 0;
-  // Y de la misma clase: la palabra que sigue al tipo (aceite de COCO, leche de AVENA) tiene que estar en el otro
-  if (a.kind && b.kind && !b.tokens.has(a.kind) && !a.tokens.has(b.kind)) return 0;
+  const ownPair = a.brandKey === OWN || b.brandKey === OWN;
+  if (!ownPair) {
+    // Tiene que ser el mismo tipo de producto, mirado desde los dos lados: una crema de manos no es un
+    // desodorante en crema, ni un tomate frito con aceite de oliva es aceite de oliva
+    if (!a.head || !b.head || !b.tokens.has(a.head) || !a.tokens.has(b.head)) return 0;
+    // Y de la misma clase: la palabra que sigue al tipo (aceite de COCO, leche de AVENA) tiene que estar en el otro
+    if (a.kind && b.kind && !b.tokens.has(a.kind) && !a.tokens.has(b.kind)) return 0;
+  } else {
+    // Marca blanca contra marca: no exigimos que la primera palabra sea el tipo
+    // (Pantene Pro-V Champú vs Champú), pero sí que compartan algo y que no falte
+    // la palabra que más distingue al producto.
+    let any = false;
+    for (const t of a.tokens) if (b.tokens.has(t)) { any = true; break; }
+    if (!any) return 0;
+  }
   let shared = 0;
   for (const t of a.tokens) if (b.tokens.has(t)) shared += weight(t);
   const base = shared / weightOf(a.tokens);
@@ -102,11 +112,12 @@ function similarity(a, b) {
   let key = null;
   for (const t of a.tokens) if (t !== a.head && (!key || weight(t) > weight(key))) key = t;
   if (key && !b.tokens.has(key)) score -= 0.4;
-  // La marca pesa: Coca-Cola no es "un refresco de cola" cualquiera
+  // La marca pesa: Coca-Cola no es "un refresco de cola" cualquiera. Pero la marca blanca
+  // del súper sí puede sustituir a una marca conocida si el producto es el mismo.
   if (a.brandKey && b.brandKey) {
     if (a.brandKey === b.brandKey) score += 0.25;
-    else if (a.brandKey !== OWN && b.brandKey !== OWN) score -= 0.35;
-    else score -= 0.1;
+    else if (a.brandKey === OWN || b.brandKey === OWN) score += 0.05;
+    else score -= 0.35;
   }
   if (a.qty && b.qty && a.qty.u === b.qty.u) {
     const r = a.qty.q / b.qty.q;
@@ -135,9 +146,16 @@ function matchesFor(it, idx) {
       }
     }
     if (!scored.length) continue;
-    // Entre los que se parecen casi igual, primero el más barato por kilo o litro
+    // Entre los que se parecen casi igual, primero el más barato por kilo o litro.
+    // Nos quedamos con varias alternativas e incluimos siempre la marca blanca más
+    // barata: una marca del súper puede ser la recomendación aunque no sea la primera.
     scored.sort((a, b) => (Math.abs(b[0] - a[0]) > 0.08 ? b[0] - a[0] : unitPrice(a[1]) - unitPrice(b[1])));
-    const [best, ...rest] = scored.slice(0, 4).map(([, c]) => view(c));
+    const top = scored.slice(0, 6);
+    const cheapestOwn = scored
+      .filter(([s, c]) => c.brandKey === OWN && s >= MIN_SIMILAR)
+      .sort((a, b) => unitPrice(a[1]) - unitPrice(b[1]))[0];
+    if (cheapestOwn && !top.some(([, c]) => c.id === cheapestOwn[1].id)) top.push(cheapestOwn);
+    const [best, ...rest] = top.map(([, c]) => view(c));
     out.push({ store, match: 'similar', product: best, alternatives: rest });
   }
   return out;
@@ -163,6 +181,29 @@ export function compareProduct(id) {
  * Para la cesta: de cada producto, la alternativa más barata en otro súper si la hay. Solo cuenta
  * "same" o un "similar" con el mismo formato de precio por unidad, para no comparar peras con kilos.
  */
+const unitInfo = (price, format) => {
+  if (!price) return null;
+  const f = String(format ?? '').toLowerCase().replace(/\s+/g, ' ').trim();
+  if (f === 'kg' || f === 'kilo' || f === 'kilos') return { family: 'weight', per: price };
+  if (f === 'g' || f === 'gr' || f === 'grs') return { family: 'weight', per: price * 1000 };
+  if (f === '100 g') return { family: 'weight', per: price * 10 };
+  if (f === 'l' || f === 'lt' || f === 'litro' || f === 'litros') return { family: 'volume', per: price };
+  if (f === 'ml') return { family: 'volume', per: price * 1000 };
+  if (f === 'cl') return { family: 'volume', per: price * 100 };
+  if (f === '100 ml') return { family: 'volume', per: price * 10 };
+  if (/^(ud|uds|unidad|unidades)\.?$/.test(f)) return { family: 'unit', per: price };
+  return null;
+};
+
+/** Ahorro al cambiar a un producto parecido, comparando por kilo/litro/unidad aunque el envase sea distinto. */
+function similarSaving(self, p) {
+  const a = unitInfo(self.ref_price, self.ref_format);
+  const b = unitInfo(p.refPrice, p.refFormat);
+  if (a && b && a.family === b.family && a.per > 0) return (a.per - b.per) / a.per * self.price;
+  if (self.size && p.size && self.size === p.size) return self.price - p.price;
+  return 0;
+}
+
 export function cheaperElsewhere(ids) {
   const out = {};
   for (const id of ids.slice(0, 300)) {
@@ -171,11 +212,23 @@ export function cheaperElsewhere(ids) {
     const self = build().byId.get(c.id);
     let best = null;
     for (const m of c.matches) {
-      const p = m.product;
-      const saving = m.match === 'same'
-        ? self.price - p.price
-        : p.refFormat && p.refFormat === self.ref_format && self.ref_price && p.refPrice ? (self.ref_price - p.refPrice) / self.ref_price * self.price : 0;
-      if (saving >= 0.05 && (!best || saving > best.saving)) best = { ...m, saving: Math.round(saving * 100) / 100 };
+      // El mejor puede no ser el primero: una marca blanca más barata también cuenta.
+      const candidates = [
+        { p: m.product, same: m.match === 'same' },
+        ...m.alternatives.map((p) => ({ p, same: false })),
+      ];
+      for (const { p, same } of candidates) {
+        const saving = same ? self.price - p.price : similarSaving(self, p);
+        if (saving >= 0.05 && (!best || saving > best.saving)) {
+          best = {
+            ...m,
+            match: same ? 'same' : 'similar',
+            product: p,
+            saving: Math.round(saving * 100) / 100,
+            approx: !same,
+          };
+        }
+      }
     }
     if (best) out[id] = best;
   }
@@ -224,7 +277,7 @@ export function basketCost(items) {
   return {
     totalItems,
     stores: [...rows.values()]
-      .filter((r) => idx.byStore.get(r.id)?.items.length)
+      .filter((r) => idx.byStore.get(r.id)?.items.length && r.matched > 0)
       .map((r) => ({
         ...r,
         total: Math.round(r.total * 100) / 100,

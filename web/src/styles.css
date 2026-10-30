@@ -732,9 +732,9 @@ img { display: block; max-width: 100%; }
 .store-name { display: inline-flex; align-items: center; gap: 7px; font-weight: 700; white-space: nowrap; }
 .store-btn { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 5px 10px 5px 6px; border-radius: 999px; background: var(--surface); border: 1px solid color-mix(in srgb, var(--hue) 45%, var(--line-strong)); box-shadow: var(--shadow-1); color: var(--ink); transition: transform .2s var(--out); }
 .store-btn:active { transform: scale(.95); }
-.store-btn .l { display: grid; text-align: left; line-height: 1.05; }
+.store-btn .l { display: grid; text-align: left; line-height: 1.05; min-width: 0; }
 .store-btn .k { font-size: .64rem; font-weight: 600; color: var(--ink-3); text-transform: uppercase; letter-spacing: .05em; }
-.store-btn b { font-size: .86rem; }
+.store-btn b { font-size: .8rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 112px; }
 .store-btn > svg { color: var(--ink-3); }
 @media (max-width: 440px) { .store-btn .k { display: none; } .topbar-end { gap: 6px; } }
 @media (max-width: 370px) { .store-btn .l { display: none; } }
@@ -797,4 +797,4 @@ img { display: block; max-width: 100%; }
 .store-tile b { font-size: 1rem; overflow-wrap: anywhere; }
 .store-tile .tick { top: 8px; right: 8px; }
 .store-tile { flex-direction: column; align-items: flex-start; gap: 10px; padding: 14px; min-height: 0; }
-.store-tile b { overflow-wrap: normal; font-size: 1.05rem; }
+.store-tile b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; font-size: .98rem; }

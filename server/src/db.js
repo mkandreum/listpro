@@ -83,9 +83,27 @@ addColumn('products', 'store', "TEXT NOT NULL DEFAULT 'mercadona'");
 addColumn('products', 'ean', 'TEXT');
 addColumn('products', 'brand', 'TEXT');
 addColumn('users', 'store', 'TEXT');
+// Planes, invitaciones y reset de contraseña
+addColumn('users', 'plan', "TEXT NOT NULL DEFAULT 'pro'");
+addColumn('users', 'plan_started_at', 'TEXT');
+addColumn('users', 'invite_code', 'TEXT');
+addColumn('users', 'invite_used_at', 'TEXT');
+addColumn('users', 'invited_by', 'TEXT');
+addColumn('users', 'reset_token_hash', 'TEXT');
+addColumn('users', 'reset_token_expires_at', 'TEXT');
+addColumn('users', 'reset_requested_at', 'TEXT');
+addColumn('users', 'last_login_at', 'TEXT');
 db.exec(`
   CREATE INDEX IF NOT EXISTS products_store ON products(store, active);
   CREATE INDEX IF NOT EXISTS products_ean ON products(ean);
+  CREATE UNIQUE INDEX IF NOT EXISTS users_invite_code ON users(invite_code) WHERE invite_code IS NOT NULL;
+  CREATE TABLE IF NOT EXISTS admin_audit (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    action TEXT NOT NULL,
+    user_id TEXT,
+    details TEXT,
+    at TEXT NOT NULL
+  );
 `);
 
 export function getMeta(key) {

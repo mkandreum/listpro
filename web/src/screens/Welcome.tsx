@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { ArrowDown, ArrowRight, Check, ChefHat, Eye, EyeOff, ShoppingBasket, Sparkles, Users } from 'lucide-react';
 import { money } from '../lib';
+import { api } from '../api';
 import { continueAsGuest, finishOnboarding, getState, login, register, setStore, useStore } from '../store';
 import { StoreChoice } from '../components/Stores';
 import { haptic } from '../fx/haptics';
@@ -168,6 +169,8 @@ export function AuthScreen() {
   const [name, setName] = useState(() => { const st = getState(); return st.members.find((m) => m.id === st.meId)?.name ?? ''; });
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [invite, setInvite] = useState('');
+  const [forgot, setForgot] = useState(false);
   const [show, setShow] = useState(false);
   // Súper preferido: el que verá nada más terminar el registro
   const [store, setStoreChoice] = useState(() => getState().store);
@@ -178,13 +181,15 @@ export function AuthScreen() {
   const isNew = mode === 'register';
   const ready = email.includes('@') && password.length >= (isNew ? 8 : 1) && (!isNew || name.trim().length > 0);
 
+  if (forgot) return <ForgotPassword initialEmail={email} onBack={() => setForgot(false)} />;
+
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     if (busy || !ready) return;
     setBusy(true);
     setError(null);
     try {
-      if (isNew) await register(name.trim(), email, password, store);
+      if (isNew) await register(name.trim(), email, password, store, invite.trim().toUpperCase());
       else await login(email, password);
       haptic.success();
     } catch (err) {
@@ -241,6 +246,14 @@ export function AuthScreen() {
             {isNew && <PasswordMeter value={password} />}
           </label>
           {isNew && (
+            <label className="text-field">
+              Código de invitación
+              <input className="input" value={invite} onChange={(e) => setInvite(e.target.value.toUpperCase().replace(/[^A-Z2-9]/g, '').slice(0, 8))}
+                autoComplete="one-time-code" autoCapitalize="characters" spellCheck={false} placeholder="Si te lo han dado" />
+              <span className="muted small" style={{ fontWeight: 500 }}>Te lo da alguien que ya usa ListPro. La primera cuenta de una instalación nueva no lo necesita.</span>
+            </label>
+          )}
+          {isNew && (
             <div className="text-field">
               Tu súper
               <span className="muted small" style={{ fontWeight: 500 }}>Es el que verás al entrar. Lo puedes cambiar cuando quieras desde arriba.</span>
@@ -253,8 +266,134 @@ export function AuthScreen() {
             {!busy && <ArrowRight size={20} />}
           </button>
         </form>
+        {!isNew && (
+          <button className="link-btn" type="button" onClick={() => { setForgot(true); setError(null); }}>He olvidado mi contraseña</button>
+        )}
         <button className="link-btn guest" onClick={() => { haptic.tick(); if (isNew) setStore(store, false); continueAsGuest(); }}>Seguir sin cuenta</button>
         <p className="muted small center-text">Solo guardamos tu nombre, tu email y tu lista. Puedes borrar la cuenta cuando quieras desde Ajustes.</p>
+      </section>
+    </div>
+  );
+}
+
+function RecoveryHero() {
+  return (
+    <section className="auth-hero" aria-hidden>
+      <span className="brand-mark big"><ShoppingBasket size={40} strokeWidth={2.2} /></span>
+      <p className="auth-word">List<em>Pro</em></p>
+    </section>
+  );
+}
+
+function ForgotPassword({ initialEmail, onBack }: { initialEmail: string; onBack: () => void }) {
+  const [email, setEmail] = useState(initialEmail);
+  const [sent, setSent] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (busy || !email.includes('@')) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await api.forgot(email);
+      haptic.success();
+      setSent(true);
+    } catch (err) {
+      haptic.warn();
+      setError((err as Error).message || 'No se pudo enviar el correo.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="auth is-back">
+      <RecoveryHero />
+      <section className="auth-card" aria-label="Recuperar contraseña">
+        <h1 className="auth-title">Recuperar <em>contraseña</em></h1>
+        {sent ? (
+          <>
+            <p className="muted">Si el email existe, te hemos enviado un enlace para cambiar la contraseña. Revisa también la carpeta de spam.</p>
+            <button className="btn primary block" onClick={onBack} style={{ marginTop: 14 }}>Volver a entrar</button>
+          </>
+        ) : (
+          <form className="auth-form" onSubmit={submit} noValidate>
+            <label className="text-field">
+              Email
+              <input className="input" type="email" inputMode="email" autoComplete="email" autoCapitalize="none" spellCheck={false}
+                value={email} onChange={(e) => setEmail(e.target.value)} placeholder="tu@email.com" />
+            </label>
+            {error && <p className="auth-error" role="alert">{error}</p>}
+            <button className="btn primary block cta" disabled={busy || !email.includes('@')}>
+              {busy ? 'Enviando…' : 'Enviar enlace'}
+              {!busy && <ArrowRight size={20} />}
+            </button>
+          </form>
+        )}
+        {!sent && <button className="link-btn" type="button" onClick={onBack}>Volver</button>}
+      </section>
+    </div>
+  );
+}
+
+export function ResetPassword({ token }: { token: string }) {
+  const [password, setPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (busy) return;
+    if (!token) return setError('El enlace no es válido. Pide otro.');
+    if (password.length < 8) return setError('La contraseña necesita al menos 8 caracteres.');
+    if (password !== confirm) return setError('Las dos contraseñas no coinciden.');
+    setBusy(true);
+    setError(null);
+    try {
+      await api.resetPassword(token, password);
+      haptic.success();
+      setDone(true);
+    } catch (err) {
+      haptic.warn();
+      setError((err as Error).message || 'No se pudo cambiar la contraseña.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="auth is-back">
+      <RecoveryHero />
+      <section className="auth-card" aria-label="Nueva contraseña">
+        <h1 className="auth-title">Nueva <em>contraseña</em></h1>
+        {done ? (
+          <>
+            <p className="muted">Contraseña cambiada. Ya puedes entrar con la nueva.</p>
+            <button className="btn primary block" onClick={() => { location.hash = '#/'; }} style={{ marginTop: 14 }}>Entrar</button>
+          </>
+        ) : (
+          <form className="auth-form" onSubmit={submit} noValidate>
+            <label className="text-field">
+              Contraseña
+              <input className="input" type="password" autoComplete="new-password" value={password}
+                onChange={(e) => setPassword(e.target.value)} placeholder="Mínimo 8 caracteres" />
+            </label>
+            <label className="text-field">
+              Repite la contraseña
+              <input className="input" type="password" autoComplete="new-password" value={confirm}
+                onChange={(e) => setConfirm(e.target.value)} placeholder="Otra vez" />
+            </label>
+            {error && <p className="auth-error" role="alert">{error}</p>}
+            <button className="btn primary block cta" disabled={busy || password.length < 8 || password !== confirm}>
+              {busy ? 'Guardando…' : 'Cambiar contraseña'}
+              {!busy && <ArrowRight size={20} />}
+            </button>
+          </form>
+        )}
       </section>
     </div>
   );

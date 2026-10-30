@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ArrowRightLeft, Check, ChevronDown, Plus } from 'lucide-react';
 import { api } from '../api';
-import { freshnessLabel, money } from '../lib';
+import { money } from '../lib';
 import { changeQty, moveToStore, setStore, storeInfo, toast, useStore } from '../store';
 import type { Comparison, Product, StoreMatch } from '../types';
 import { haptic } from '../fx/haptics';
@@ -75,8 +75,6 @@ export function StoreButton() {
 
 export function StoreSheet({ onClose }: { onClose: () => void }) {
   const store = useStore((s) => s.store);
-  const stores = useStore((s) => s.stores);
-  const updatedAt = stores.find((s) => s.id === store)?.updatedAt;
   return (
     <Sheet onClose={onClose} label="Cambiar de súper">
       <h2 style={{ marginTop: 4 }}>¿En qué súper compras?</h2>
@@ -88,8 +86,7 @@ export function StoreSheet({ onClose }: { onClose: () => void }) {
           onClose();
         }} />
       </div>
-      {updatedAt && <p className="muted small" style={{ marginTop: 12 }}>Precios de {storeInfo(store).name}: {freshnessLabel(updatedAt).toLowerCase()}.</p>}
-      <p className="muted small" style={{ marginTop: 6 }}>ListPro no está afiliada a ningún súper. Los precios se leen cada día de sus tiendas online públicas.</p>
+      <p className="muted small" style={{ marginTop: 12 }}>ListPro no está afiliada a ningún súper. Los precios se leen cada día de sus tiendas online públicas.</p>
     </Sheet>
   );
 }

@@ -8,7 +8,8 @@ export type Route =
   | { name: 'plan'; recipe?: number }
   | { name: 'basket'; join?: string }
   | { name: 'stats' }
-  | { name: 'settings' };
+  | { name: 'settings' }
+  | { name: 'reset'; token: string };
 
 export function parse(hash: string): Route {
   const [path, query = ''] = hash.replace(/^#/, '').split('?');
@@ -26,6 +27,7 @@ export function parse(hash: string): Route {
     case 'compartir': return { name: 'basket', join: '' };
     case 'gastos': return { name: 'stats' };
     case 'ajustes': return { name: 'settings' };
+    case 'reset': return { name: 'reset', token: params.get('token') ?? '' };
     default: return { name: 'home' };
   }
 }
@@ -40,6 +42,7 @@ export function href(r: Route): string {
     case 'basket': return r.join ? `#/unirse/${r.join}` : r.join === '' ? '#/compartir' : '#/cesta';
     case 'stats': return '#/gastos';
     case 'settings': return '#/ajustes';
+    case 'reset': return `#/reset?token=${encodeURIComponent(r.token)}`;
   }
 }
 

@@ -271,6 +271,9 @@ export interface User {
   /** Súper preferido: el que se ve al entrar. */
   store?: string | null;
   createdAt: string;
+  plan?: 'pro' | 'free';
+  planStartedAt?: string | null;
+  inviteCode?: string | null;
 }
 
 export interface Session {

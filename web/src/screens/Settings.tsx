@@ -1,11 +1,10 @@
-import { useRef } from 'react';
 import { useState as useLocalState } from 'react';
-import { ChevronRight, Download, KeyRound, LogOut, MonitorSmartphone, Pencil, RefreshCw, Trash2, Upload, UserRound, Users } from 'lucide-react';
+import { ChevronRight, Copy, KeyRound, LogOut, MonitorSmartphone, Pencil, Trash2, UserRound, Users } from 'lucide-react';
 import { Avatar } from '../components/Share';
 import { StoreDot, StoreName, StoreSheet } from '../components/Stores';
 import { href } from '../router';
 import {
-  changePassword, checkCatalogUpdate, deleteAccount, exportBackup, importBackup, logout, logoutEverywhere, renameAccount, setTheme, toast, useStore, wantAccount,
+  changePassword, deleteAccount, logout, logoutEverywhere, renameAccount, setTheme, toast, useStore, wantAccount,
   type ThemePref,
 } from '../store';
 import { haptic } from '../fx/haptics';
@@ -17,10 +16,16 @@ export function Settings() {
   const [picking, setPicking] = useLocalState(false);
   const theme = useStore((s) => s.theme);
   const members = useStore((s) => s.members);
-  const file = useRef<HTMLInputElement>(null);
+  const inviteCode = useStore((s) => s.auth?.user.inviteCode);
 
-  const run = async (fn: () => Promise<unknown>, ok: string) => {
-    try { await fn(); toast(ok); } catch (e) { toast((e as Error).message || 'No se pudo conectar'); }
+  const copyInvite = async () => {
+    if (!inviteCode) return;
+    try {
+      await navigator.clipboard.writeText(inviteCode);
+      toast('Invitación copiada');
+    } catch {
+      toast(`Tu invitación es ${inviteCode}`);
+    }
   };
 
   return (
@@ -57,25 +62,21 @@ export function Settings() {
         <p className="muted small" style={{ marginTop: 8 }}>Los precios se descargan cada mañana de las tiendas online de cada súper. ListPro no está afiliada a ningún súper.</p>
         <div className="stack-btns">
           <button className="btn" onClick={() => setPicking(true)}><StoreDot id={store} size={20} /> Cambiar de súper</button>
-          <button className="btn" onClick={() => run(async () => { await checkCatalogUpdate(); }, 'Catálogo al día')}><RefreshCw size={18} /> Comprobar ahora</button>
         </div>
       </section>
 
       {picking && <StoreSheet onClose={() => setPicking(false)} />}
 
-      <section className="panel" aria-labelledby="h-backup">
-        <h2 className="h-block" id="h-backup">Copia de seguridad</h2>
-        <div className="stack-btns">
-          <button className="btn" onClick={exportBackup}><Download size={18} /> Descargar copia</button>
-          <button className="btn" onClick={() => file.current?.click()}><Upload size={18} /> Restaurar copia</button>
-        </div>
-        <input ref={file} type="file" accept="application/json,.json" hidden onChange={async (e) => {
-          const f = e.target.files?.[0];
-          e.target.value = '';
-          if (!f) return;
-          try { await importBackup(f); toast('Datos restaurados'); } catch { toast('Ese archivo no es una copia de ListPro'); }
-        }} />
-      </section>
+      {inviteCode && (
+        <section className="panel" aria-labelledby="h-invite">
+          <h2 className="h-block" id="h-invite">Tu invitación</h2>
+          <p className="muted small">Comparte este código para que alguien pueda crear su cuenta en ListPro.</p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 10, flexWrap: 'wrap' }}>
+            <b className="num" style={{ fontSize: '1.35rem', letterSpacing: '.12em', background: 'var(--surface-2)', padding: '10px 14px', borderRadius: 12 }}>{inviteCode}</b>
+            <button className="btn" onClick={copyInvite}><Copy size={18} /> Copiar</button>
+          </div>
+        </section>
+      )}
     </>
   );
 }

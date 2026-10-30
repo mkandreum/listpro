@@ -3,19 +3,23 @@ import compression from 'compression';
 import crypto from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { db, getMeta } from './db.js';
+import { db, getMeta, setMeta } from './db.js';
 import { getCatalog, getPriceHistory } from './catalog.js';
 import { isScraping, scheduleScraping, scrapeAll, scrapeCatalog } from './scraper.js';
 import { basketCost, cheaperElsewhere, compareProduct } from './compare.js';
 import { isStore, metaKey, storeParam, STORES } from './stores.js';
 import { createPlan, getPlan, plannerOptions, PlannerError, swapRecipe } from './planner.js';
 import {
-  checkPassword, cleanName, CODE_RE, createUser, findByEmail, hashPassword, normalizeEmail, PASSWORD_MAX, PASSWORD_MIN,
-  rateLimit, requireAuth, signSession, toUser, validEmail,
+  checkPassword, cleanName, clearResetToken, CODE_RE, consumeInvite, createUser, findByEmail, findById, findInvite,
+  hashPassword, newInviteCode, normalizeEmail, PASSWORD_MAX, PASSWORD_MIN, rateLimit, requireAuth, setResetToken,
+  signSession, toUser, validEmail,
 } from './auth.js';
+import { encryptSecret } from './secret.js';
+import { publicSmtp, sendPasswordResetEmail, sendTestEmail, SMTP_MASK, smtpConfigured } from './mailer.js';
 
 const PORT = Number(process.env.PORT ?? 3000);
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN ?? '';
+const APP_URL = (process.env.APP_URL ?? 'https://listpro.xyoncloud.win').replace(/\/$/, '');
 const publicDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../public');
 
 const app = express();
@@ -31,6 +35,16 @@ app.use('/api', (req, res, next) => {
   if (req.method === 'OPTIONS') return res.sendStatus(204);
   next();
 });
+
+function requireAdmin(req, res, next) {
+  if (!ADMIN_TOKEN) return res.status(503).json({ error: 'ADMIN_TOKEN no configurado en el servidor.' });
+  const [kind, token] = String(req.header('authorization') || '').split(' ');
+  const ok = /^Bearer$/i.test(kind) && token
+    && token.length === ADMIN_TOKEN.length
+    && crypto.timingSafeEqual(Buffer.from(token), Buffer.from(ADMIN_TOKEN));
+  if (!ok) return res.status(401).json({ error: 'No autorizado.' });
+  next();
+}
 
 app.get('/api/health', (_req, res) => {
   res.json({ ok: true, catalogUpdatedAt: getMeta('catalog_updated_at'), scraping: isScraping(), stores: Object.fromEntries(STORES.map((s) => [s.id, getMeta(metaKey(s.id, 'catalog_updated_at'))])) });
@@ -138,6 +152,31 @@ const authLimit = rateLimit(10, 15 * 60_000, (req) => `${ip(req)}:${normalizeEma
 const registerLimit = rateLimit(5, 60 * 60_000, ip, 'Demasiadas cuentas nuevas desde aquí. Prueba más tarde.');
 const session = (res, u, status = 200) => res.status(status).json({ token: signSession(u), user: toUser(u) });
 const listExists = (code) => CODE_RE.test(code ?? '') && !!db.prepare('SELECT 1 FROM lists WHERE code = ?').get(code);
+const forgotLimit = rateLimit(5, 15 * 60_000, (req) => `${ip(req)}:${normalizeEmail(req.body?.email)}`, 'Demasiadas solicitudes. Espera unos minutos.');
+const sha256 = (s) => crypto.createHash('sha256').update(String(s)).digest('hex');
+const RESET_TTL_MS = 60 * 60_000;
+const RESET_COOLDOWN_MS = 10 * 60_000;
+
+/** Genera un token de reset, lo guarda hasheado y envía el correo. Nunca devuelve el token. */
+async function issueReset(user) {
+  const now = Date.now();
+  if (user.reset_token_expires_at) {
+    const expires = Date.parse(user.reset_token_expires_at);
+    if (Number.isFinite(expires) && expires - now > RESET_TTL_MS - RESET_COOLDOWN_MS) {
+      return { sent: false, skipped: true };
+    }
+  }
+  const token = crypto.randomBytes(32).toString('hex');
+  setResetToken(user.id, sha256(token), new Date(now + RESET_TTL_MS).toISOString(), new Date(now).toISOString());
+  try {
+    await sendPasswordResetEmail(user.email, `${APP_URL}/#/reset?token=${token}`);
+    return { sent: true };
+  } catch (e) {
+    console.error('[mail] reset:', e.message);
+    clearResetToken(user.id);
+    return { sent: false, error: e.message };
+  }
+}
 
 app.post('/api/auth/register', registerLimit, async (req, res) => {
   const name = cleanName(req.body?.name);
@@ -148,9 +187,27 @@ app.post('/api/auth/register', registerLimit, async (req, res) => {
   if (password.length < PASSWORD_MIN || password.length > PASSWORD_MAX)
     return res.status(400).json({ error: `La contraseña necesita al menos ${PASSWORD_MIN} caracteres.` });
   if (findByEmail(email)) return res.status(409).json({ error: 'Ya hay una cuenta con ese email. Entra con ella.' });
+
+  // Invitaciones: por defecto hace falta una; el panel puede abrir el registro.
+  const invite = String(req.body?.invite ?? '').trim().toUpperCase();
+  const mode = getMeta('registration_mode') ?? 'invite';
+  const inviter = invite ? findInvite(invite) : null;
+  // La primera cuenta de una instalación nueva puede crearse sin invitación.
+  const bootstrap = db.prepare('SELECT COUNT(*) AS n FROM users').get().n === 0;
+  if (mode === 'invite' && !inviter && !bootstrap)
+    return res.status(403).json({ error: 'Necesitas una invitación válida para crear la cuenta.', code: 'INVITE_REQUIRED' });
+  if (invite && !inviter)
+    return res.status(400).json({ error: 'Ese código de invitación no es válido o ya se ha usado.', code: 'INVALID_INVITE' });
+
   const listCode = typeof req.body?.listCode === 'string' ? req.body.listCode.toUpperCase() : null;
   try {
-    const u = createUser({ id: req.body?.memberId, name, email, passwordHash: await hashPassword(password), listCode: listExists(listCode) ? listCode : null, store: isStore(req.body?.store) ? req.body.store : null });
+    const plan = getMeta('new_user_plan') === 'free' ? 'free' : 'pro';
+    const u = createUser({
+      id: req.body?.memberId, name, email, passwordHash: await hashPassword(password),
+      listCode: listExists(listCode) ? listCode : null, store: isStore(req.body?.store) ? req.body.store : null,
+      plan, invitedBy: inviter?.id ?? null,
+    });
+    if (inviter) consumeInvite(invite, new Date().toISOString());
     session(res, u, 201);
   } catch (e) {
     if (String(e?.message).includes('UNIQUE')) return res.status(409).json({ error: 'Ya hay una cuenta con ese email. Entra con ella.' });
@@ -164,7 +221,36 @@ app.post('/api/auth/login', authLimit, async (req, res) => {
   const password = typeof req.body?.password === 'string' ? req.body.password.slice(0, PASSWORD_MAX) : '';
   const u = email ? findByEmail(email) : null;
   if (!(await checkPassword(u, password))) return res.status(401).json({ error: 'Email o contraseña incorrectos.' });
+  db.prepare('UPDATE users SET last_login_at = ? WHERE id = ?').run(new Date().toISOString(), u.id);
   session(res, u);
+});
+
+// Siempre la misma respuesta: no revelamos si el email existe.
+app.post('/api/auth/forgot', forgotLimit, async (req, res) => {
+  const email = normalizeEmail(req.body?.email);
+  const generic = { ok: true, message: 'Si el email existe, te hemos enviado un enlace para cambiar la contraseña.' };
+  if (!validEmail(email)) return res.json(generic);
+  const u = findByEmail(email);
+  if (u) {
+    const result = await issueReset(u);
+    if (!result.sent && !result.skipped) console.error('[auth] no se pudo enviar el reset a', email);
+  }
+  res.json(generic);
+});
+
+app.post('/api/auth/reset', authLimit, async (req, res) => {
+  const token = typeof req.body?.token === 'string' ? req.body.token : '';
+  const password = typeof req.body?.password === 'string' ? req.body.password : '';
+  if (token.length < 32 || token.length > 200) return res.status(400).json({ error: 'El enlace no es válido.' });
+  if (password.length < PASSWORD_MIN || password.length > PASSWORD_MAX)
+    return res.status(400).json({ error: `La contraseña necesita al menos ${PASSWORD_MIN} caracteres.` });
+  const u = db.prepare('SELECT * FROM users WHERE reset_token_hash = ?').get(sha256(token));
+  if (!u || !u.reset_token_expires_at || Date.parse(u.reset_token_expires_at) < Date.now())
+    return res.status(400).json({ error: 'El enlace ha caducado. Pide otro.' });
+  db.prepare('UPDATE users SET password_hash = ?, token_version = token_version + 1 WHERE id = ?')
+    .run(await hashPassword(password), u.id);
+  clearResetToken(u.id);
+  res.json({ ok: true });
 });
 
 app.get('/api/me', requireAuth, (req, res) => res.json(toUser(req.user)));
@@ -206,6 +292,135 @@ app.delete('/api/me', requireAuth, authLimit, async (req, res) => {
     return res.status(403).json({ error: 'La contraseña no es correcta.' });
   db.prepare('DELETE FROM users WHERE id = ?').run(req.user.id);
   res.status(204).end();
+});
+
+// --- Administración (panel ListProUserWeb) ---
+const adminUser = (u) => ({
+  id: u.id, name: u.name, email: u.email, plan: u.plan ?? 'free',
+  planStartedAt: u.plan_started_at ?? null, createdAt: u.created_at,
+  lastLoginAt: u.last_login_at ?? null, inviteCode: u.invite_code ?? null,
+  inviteUsedAt: u.invite_used_at ?? null, invitedBy: u.invited_by ?? null,
+  listCode: u.list_code ?? null, store: u.store ?? null,
+});
+const logAdmin = (action, userId, details = null) =>
+  db.prepare('INSERT INTO admin_audit (action, user_id, details, at) VALUES (?, ?, ?, ?)')
+    .run(action, userId ?? null, details ? JSON.stringify(details) : null, new Date().toISOString());
+
+app.get('/api/admin/users', requireAdmin, (req, res) => {
+  const q = String(req.query.q ?? '').trim();
+  const plan = req.query.plan === 'pro' || req.query.plan === 'free' ? req.query.plan : null;
+  const page = Math.max(1, Number(req.query.page) || 1);
+  const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 25));
+  const where = [];
+  const params = [];
+  if (q) { where.push('(name LIKE ? OR email LIKE ?)'); params.push(`%${q}%`, `%${q}%`); }
+  if (plan) { where.push('plan = ?'); params.push(plan); }
+  const clause = where.length ? `WHERE ${where.join(' AND ')}` : '';
+  const total = db.prepare(`SELECT COUNT(*) AS n FROM users ${clause}`).get(...params).n;
+  const users = db.prepare(`SELECT * FROM users ${clause} ORDER BY created_at DESC LIMIT ? OFFSET ?`)
+    .all(...params, limit, (page - 1) * limit)
+    .map(adminUser);
+  res.json({ users, total, page, pageSize: limit });
+});
+
+app.get('/api/admin/users/:id', requireAdmin, (req, res) => {
+  const u = findById(req.params.id);
+  if (!u) return res.status(404).json({ error: 'Usuario no encontrado.' });
+  res.json(adminUser(u));
+});
+
+app.patch('/api/admin/users/:id', requireAdmin, (req, res) => {
+  const u = findById(req.params.id);
+  if (!u) return res.status(404).json({ error: 'Usuario no encontrado.' });
+  const plan = req.body?.plan;
+  if (plan !== 'pro' && plan !== 'free') return res.status(400).json({ error: 'Plan no válido.' });
+  db.prepare('UPDATE users SET plan = ?, plan_started_at = COALESCE(plan_started_at, ?) WHERE id = ?')
+    .run(plan, new Date().toISOString(), u.id);
+  logAdmin('user.plan', u.id, { from: u.plan, to: plan });
+  res.json(adminUser(findById(u.id)));
+});
+
+app.post('/api/admin/users/:id/invite', requireAdmin, (req, res) => {
+  const u = findById(req.params.id);
+  if (!u) return res.status(404).json({ error: 'Usuario no encontrado.' });
+  let code = newInviteCode();
+  while (db.prepare('SELECT 1 FROM users WHERE invite_code = ?').get(code)) code = newInviteCode();
+  db.prepare('UPDATE users SET invite_code = ?, invite_used_at = NULL WHERE id = ?').run(code, u.id);
+  logAdmin('user.invite', u.id, { code });
+  res.json(adminUser(findById(u.id)));
+});
+
+app.post('/api/admin/users/:id/reset', requireAdmin, async (req, res) => {
+  const u = findById(req.params.id);
+  if (!u) return res.status(404).json({ error: 'Usuario no encontrado.' });
+  const result = await issueReset(u);
+  logAdmin('user.reset', u.id, { sent: result.sent, skipped: !!result.skipped });
+  if (!result.sent) {
+    return res.status(400).json({
+      error: result.skipped ? 'Ya se envió un enlace hace menos de 10 minutos.' : (result.error || 'No se pudo enviar el correo.'),
+      code: 'MAIL_FAILED',
+    });
+  }
+  res.json({ ok: true });
+});
+
+app.get('/api/admin/settings', requireAdmin, (_req, res) => {
+  res.json({
+    newUserPlan: getMeta('new_user_plan') === 'free' ? 'free' : 'pro',
+    registrationMode: getMeta('registration_mode') === 'open' ? 'open' : 'invite',
+    smtp: publicSmtp(),
+  });
+});
+
+app.put('/api/admin/settings', requireAdmin, (req, res) => {
+  if (req.body?.newUserPlan !== undefined)
+    setMeta('new_user_plan', req.body.newUserPlan === 'free' ? 'free' : 'pro');
+  if (req.body?.registrationMode !== undefined)
+    setMeta('registration_mode', req.body.registrationMode === 'open' ? 'open' : 'invite');
+  logAdmin('settings.update', null, req.body);
+  res.json({
+    newUserPlan: getMeta('new_user_plan') === 'free' ? 'free' : 'pro',
+    registrationMode: getMeta('registration_mode') === 'open' ? 'open' : 'invite',
+    smtp: publicSmtp(),
+  });
+});
+
+app.put('/api/admin/smtp', requireAdmin, (req, res) => {
+  const b = req.body ?? {};
+  if (b.host !== undefined) setMeta('smtp_host', String(b.host).trim());
+  if (b.port !== undefined) {
+    const port = Number(b.port);
+    setMeta('smtp_port', String(Number.isFinite(port) && port > 0 ? port : 587));
+  }
+  if (b.user !== undefined) setMeta('smtp_user', String(b.user).trim());
+  if (b.secure !== undefined) setMeta('smtp_secure', b.secure ? 'true' : 'false');
+  if (b.from !== undefined) setMeta('smtp_from', String(b.from).trim());
+  if (b.pass && b.pass !== SMTP_MASK) setMeta('smtp_pass', encryptSecret(String(b.pass)));
+  logAdmin('smtp.update', null, { host: b.host, user: b.user });
+  res.json(publicSmtp());
+});
+
+app.post('/api/admin/smtp/test', requireAdmin, async (req, res) => {
+  const to = normalizeEmail(req.body?.to) || publicSmtp().user;
+  if (!to) return res.status(400).json({ error: 'Indica un email de destino.' });
+  try {
+    await sendTestEmail(to);
+    logAdmin('smtp.test', null, { to });
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(400).json({ error: e.message || 'No se pudo enviar el correo.' });
+  }
+});
+
+app.get('/api/admin/stats', requireAdmin, (_req, res) => {
+  const stats = db.prepare(`SELECT
+    COUNT(*) AS total,
+    SUM(CASE WHEN plan = 'pro' THEN 1 ELSE 0 END) AS pro,
+    SUM(CASE WHEN plan = 'free' THEN 1 ELSE 0 END) AS free,
+    SUM(CASE WHEN invite_used_at IS NOT NULL THEN 1 ELSE 0 END) AS invitesUsed,
+    SUM(CASE WHEN invite_code IS NOT NULL AND invite_used_at IS NULL THEN 1 ELSE 0 END) AS invitesPending
+    FROM users`).get();
+  res.json({ ...stats, smtpConfigured: smtpConfigured() });
 });
 
 // --- Planes de recetas con IA ---

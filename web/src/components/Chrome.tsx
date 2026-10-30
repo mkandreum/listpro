@@ -1,13 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { BarChart3, ChefHat, Clock3, Search, Settings, ShoppingBasket, SlidersHorizontal, Store, X } from 'lucide-react';
-import { freshnessLabel, units } from '../lib';
+import { BarChart3, ChefHat, Search, Settings, ShoppingBasket, SlidersHorizontal, Store, X } from 'lucide-react';
+import { units } from '../lib';
 import { href, navigate, type Route } from '../router';
 import { useStore } from '../store';
 import { StoreButton } from './Stores';
 import { haptic } from '../fx/haptics';
 
 export function TopBar() {
-  const updatedAt = useStore((s) => s.catalog?.updatedAt);
   return (
     <header className="topbar">
       <a href="#/" className="brand" aria-label="ListPro, inicio">
@@ -19,15 +18,6 @@ export function TopBar() {
       </a>
       <div className="topbar-end">
         <StoreButton />
-        {updatedAt && (
-          <span className="stamp num" title={freshnessLabel(updatedAt)}>
-            <span className="pulse" />
-            <span className="long">{freshnessLabel(updatedAt)}</span>
-            {/* En móviles estrechos solo cabe la hora (o el día) */}
-            <span className="short">{freshnessLabel(updatedAt).split('·').pop()!.trim()}</span>
-            <Clock3 size={15} strokeWidth={2.4} />
-          </span>
-        )}
       </div>
     </header>
   );

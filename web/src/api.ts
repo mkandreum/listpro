@@ -22,9 +22,11 @@ async function friendly<T>(res: Response): Promise<T> {
 }
 
 export const api = {
-  register: (b: { name: string; email: string; password: string; memberId?: string | null; listCode?: string | null; store?: string }) =>
+  register: (b: { name: string; email: string; password: string; memberId?: string | null; listCode?: string | null; store?: string; invite?: string }) =>
     send('POST', '/api/auth/register', b).then((r) => friendly<Session>(r)),
   login: (email: string, password: string) => send('POST', '/api/auth/login', { email, password }).then((r) => friendly<Session>(r)),
+  forgot: (email: string) => send('POST', '/api/auth/forgot', { email }).then((r) => json<{ ok: boolean; message: string }>(r)),
+  resetPassword: (token: string, password: string) => send('POST', '/api/auth/reset', { token, password }).then((r) => friendly<{ ok: boolean }>(r)),
   me: (token: string) => send('GET', '/api/me', undefined, token).then((r) => friendly<User>(r)),
   updateMe: (token: string, patch: { name?: string; listCode?: string | null; store?: string }) => send('PUT', '/api/me', patch, token).then((r) => friendly<User>(r)),
   changePassword: (token: string, current: string, next: string) =>
