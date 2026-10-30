@@ -23,9 +23,10 @@ ListPro 2.0 son tres piezas conectadas que comparten catálogo, categorías y ce
 1. **Scraper diario** (`server/src/scraper.js` + un lector por súper en `server/src/scrapers/`):
    - **Mercadona** (`tienda.mercadona.es`): 26 categorías → ~150 subcategorías → grupos, ~4.300 productos. Como su listado no trae el código de barras, cada pasada pide la ficha de hasta `EAN_PER_RUN` productos (1.500 por defecto, los nuevos primero) para poder compararlos.
    - **Consum** (`tienda.consum.es`): ~9.200 productos con código de barras, 93 páginas por pasada.
+   - **El Corte Inglés** (`elcorteingles.es`): ~15.000 productos. Cada sección devuelve JSON pidiéndola con `response_type: json`; se recorren sus categorías con 350 ms entre páginas.
    - Guarda precio, €/kg, precio tachado de oferta, foto y enlace, y un **histórico de cambios de precio**. Se ejecuta al arrancar si algún catálogo tiene más de 20 h y cada día a las `SCRAPE_HOUR` (hora de Madrid), un súper detrás de otro. Si una pasada trae un catálogo anómalo (muy pocos productos o una caída del 40 %), no machaca el bueno.
    - Los productos de Mercadona conservan sus ids (`27348`); los de Consum llevan prefijo (`c:4667`) y sus categorías un desplazamiento, así nada choca y las cestas y apps antiguas siguen valiendo.
-   - Carrefour, Alcampo y Lidl se probaron en octubre de 2026: los dos primeros protegen su tienda online contra bots y Lidl solo publica online unas pocas ofertas. Añadir otro súper es escribir su lector y darlo de alta en `server/src/stores.js`.
+   - Alcampo y Family Cash no se añaden: Alcampo devuelve un reto de AWS WAF a las pocas peticiones y Family Cash no tiene tienda online. El ritmo es de una petición cada 350 ms por súper, con reintentos y respeto a `Retry-After`.
 2. **Categorías mejoradas** (`server/src/taxonomy.js`): se agrupan por ID (no por palabras clave, que fallaban: "sal" casaba con "salsas") en 9 pasillos de compra, cada uno con su color, y cada categoría lleva fotos reales de sus productos. Las de Consum se colocan en los mismos 9 pasillos.
 3. **Comparador** (`server/src/compare.js`): para cada producto, su equivalente en los otros súper. «Mismo producto» si coincide el código de barras; si no, «parecido»: mismo pasillo, mismo tipo de producto (la primera palabra del nombre, en los dos sentidos) y de la misma clase (la que la sigue: aceite de *coco* no es aceite de *oliva*), palabras pesadas por lo raras que son, marca y formato. Se compara por precio por kilo o litro.
 4. **API** (`server/src/index.js`):
@@ -34,6 +35,7 @@ ListPro 2.0 son tres piezas conectadas que comparten catálogo, categorías y ce
    - `GET /api/catalog/meta?store=` — versión, para saber si hay precios nuevos.
    - `GET /api/products/:id/compare` — el mismo producto o uno parecido en los otros súper.
    - `POST /api/compare` `{ ids }` — para la cesta: qué productos salen más baratos en otro súper.
+   - `POST /api/basket/compare` `{ items: [{ id, qty }] }` - coste aproximado de la cesta en cada súper, con cobertura de productos emparejados.
    - `GET /api/products/:id/history` — historial de precio.
    - `POST/GET/PUT /api/lists/:code` — lista compartida por código de 8 caracteres (web ↔ Android ↔ familia).
    - `GET /api/planner/options`, `POST /api/plans`, `GET /api/plans/:id`, `POST /api/plans/:id/swap` — planes de recetas con IA (Gemini) sobre el catálogo real, y cambiar una receta suelta.
@@ -72,7 +74,7 @@ La app Android se compila desde [listproapp](https://github.com/mkandreum/listpr
 1. En Coolify, crea un recurso nuevo: *Private Repository (GitHub App)* → `mkandreum/listpro`, rama `main`, Build Pack **Docker Compose** (`docker-compose.yaml`).
 2. Variables de entorno: `GEMINI_API_KEY` (la de Puchero/VoltBody; sin ella la pestaña Recetas avisa de que no está disponible) y, opcionales, `GEMINI_MODEL_PLAN`, `GEMINI_MODEL_FAST`, `MERCADONA_WH` (por defecto `mad1`), `SCRAPE_HOUR` (por defecto `6`), `EAN_PER_RUN` (por defecto `1500`) y `ADMIN_TOKEN`.
 3. Asigna el dominio `listpro.xyoncloud.win` al servicio `app`, puerto **3000**.
-4. Lanza **Deploy**. Al arrancar descarga los catálogos que falten (Mercadona ~1,5 min, Consum ~1 min); después se actualizan cada mañana. La base de datos vive en el volumen `listpro_data` y sobrevive a los redespliegues.
+4. Lanza **Deploy**. Al arrancar descarga solo los catálogos nuevos o viejos (los que falten) (Mercadona ~1,5 min, Consum ~1 min, El Corte Inglés ~15-20 min); después se actualizan cada mañana. La base de datos vive en el volumen `listpro_data` y sobrevive a los redespliegues.
 
 Con el recurso creado y *Auto Deploy* activo, cada push a `main` se redespliega solo.
 

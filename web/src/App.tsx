@@ -36,10 +36,23 @@ export function App() {
   const catalogError = useStore((s) => s.catalogError);
   const onboarded = useStore((s) => s.onboarded);
   const needsAuth = useStore((s) => !s.auth && !s.guest);
+  const store = useStore((s) => s.store);
+  const stores = useStore((s) => s.stores);
+  const hue = stores.find((s) => s.id === store)?.hue
+    ?? (store === 'eci' ? '#7C3AED' : store === 'consum' ? '#F28C00' : '#00A650');
+  // Mercadona conserva el verde de siempre; el resto usa el color de su marca.
+  const accent = store === 'mercadona' ? '#22C55E' : hue;
   const [open, setOpen] = useState<Product | null>(null);
   const onOpen = useCallback((p: Product) => setOpen(p), []);
   const onClose = useCallback(() => setOpen(null), []);
   useTheme();
+
+  // El acento de toda la interfaz sigue al súper seleccionado.
+  useEffect(() => {
+    const root = document.documentElement;
+    root.style.setProperty('--accent', accent);
+    root.dataset.store = store;
+  }, [store, accent]);
 
   useEffect(() => {
     loadCatalog().then(loadBasketCatalogs);

@@ -18,9 +18,12 @@ interface Indexes {
 export const DEFAULT_STORES: StoreInfo[] = [
   { id: 'mercadona', name: 'Mercadona', hue: '#00A650', count: 0, updatedAt: null },
   { id: 'consum', name: 'Consum', hue: '#F28C00', count: 0, updatedAt: null },
+  { id: 'eci', name: 'El Corte Inglés', hue: '#7C3AED', count: 0, updatedAt: null },
 ];
-/** El súper de un producto por su id: los de Consum empiezan por "c:"; los de Mercadona no llevan prefijo. */
-export const storeOf = (productId: string): string => (productId.startsWith('c:') ? 'consum' : 'mercadona');
+/** El súper de un producto por su id: "c:" Consum, "e:" El Corte Inglés; Mercadona no lleva prefijo. */
+export const storeOf = (productId: string): string => (
+  productId.startsWith('e:') ? 'eci' : productId.startsWith('c:') ? 'consum' : 'mercadona'
+);
 
 export interface State {
   /** Súper que se está viendo: su catálogo es `catalog`. */

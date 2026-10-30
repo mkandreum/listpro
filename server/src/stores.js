@@ -9,6 +9,7 @@
 export const STORES = [
   { id: 'mercadona', name: 'Mercadona', hue: '#00A650', prefix: '', categoryOffset: 0 },
   { id: 'consum', name: 'Consum', hue: '#F28C00', prefix: 'c:', categoryOffset: 1_000_000 },
+  { id: 'eci', name: 'El Corte Inglés', hue: '#7C3AED', prefix: 'e:', categoryOffset: 2_000_000 },
 ];
 
 export const DEFAULT_STORE = 'mercadona';

@@ -117,6 +117,7 @@ const CONSUM_EMOJI = {
   1487: '🎁', 4540: '📚', 5011: '🍳', 4542: '🥡', 1299: '🥤', 4543: '🌻', 2462: '🔋', 1509: '🕯️',
 };
 const CONSUM_OFFSET = 1_000_000;
+const ECI_OFFSET = 2_000_000;
 
 // Pasillo de las categorías de otros súper: lo guarda el lector al descargar el catálogo
 let extraSections = null;
@@ -131,6 +132,10 @@ export function sectionIdFor(categoryId) {
 }
 
 export function categoryEmoji(categoryId) {
+  if (categoryId >= ECI_OFFSET) {
+    const section = sectionIdFor(categoryId);
+    return SECTIONS.find((s) => s.id === section)?.emoji ?? '🛒';
+  }
   if (categoryId >= CONSUM_OFFSET) return CONSUM_EMOJI[categoryId - CONSUM_OFFSET] ?? '🛒';
   return CATEGORY_META[categoryId]?.emoji ?? '🛒';
 }

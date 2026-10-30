@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import zlib from 'node:zlib';
 import { db, getMeta } from './db.js';
-import { buildTree, sectionIdFor } from './taxonomy.js';
+import { buildTree, reloadSections, sectionIdFor } from './taxonomy.js';
 import { DEFAULT_STORE, getStore, metaKey } from './stores.js';
 
 // Un cambio de precio se marca como "sube/baja" en la app durante estos días.
@@ -14,6 +14,10 @@ export function getCatalog(store = DEFAULT_STORE) {
   const version = getMeta(metaKey(store, 'catalog_version')) ?? '0';
   const cached = caches.get(store);
   if (cached?.version === version) return cached;
+
+  // Si el scrape lo ha hecho otro proceso (CLI, otro contenedor), este proceso
+  // necesita releer el pasillo de cada categoría antes de construir el árbol.
+  reloadSections();
 
   const categories = db.prepare('SELECT id, name, position FROM categories WHERE parent_id IS NULL AND store = ? ORDER BY position').all(store);
   const subcategories = db.prepare('SELECT id, parent_id, name, position FROM categories WHERE parent_id IS NOT NULL AND store = ? ORDER BY parent_id, position').all(store);

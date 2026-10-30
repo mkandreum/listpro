@@ -13,10 +13,25 @@ export function Thumb({ src }: { src: string | null }) {
   return src && !broken ? <img src={src} alt="" loading="lazy" onError={() => setBroken(true)} /> : <span className="ph" />;
 }
 
-/** Inicial del súper en su color: la marca sin usar su logotipo. */
+/** Logotipo original de cada súper; si no hay, la inicial en su color. */
+const STORE_LOGOS: Record<string, string> = {
+  mercadona: '/logos/mercadona.png',
+  consum: '/logos/consum.png',
+  eci: '/logos/eci.png',
+};
+
 export function StoreDot({ id, size = 22 }: { id: string; size?: number }) {
   const s = useStore((st) => storeInfo(id, st));
-  return <span className="store-dot" style={{ '--hue': s.hue, '--s': `${size}px` } as React.CSSProperties} aria-hidden>{s.name[0]}</span>;
+  const logo = STORE_LOGOS[id];
+  return (
+    <span
+      className={`store-dot${logo ? ' has-logo' : ''}`}
+      style={{ '--hue': s.hue, '--s': `${size}px` } as React.CSSProperties}
+      aria-hidden
+    >
+      {logo ? <img src={logo} alt="" loading="lazy" /> : s.name[0]}
+    </span>
+  );
 }
 
 export function StoreName({ id }: { id: string }) {

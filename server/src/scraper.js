@@ -3,12 +3,13 @@ import { DEFAULT_STORE, metaKey, STORES } from './stores.js';
 import { reloadSections } from './taxonomy.js';
 import * as mercadona from './scrapers/mercadona.js';
 import * as consum from './scrapers/consum.js';
+import * as eci from './scrapers/eci.js';
 
 // Un lector por súper: fetchCatalog() devuelve categorías y productos ya en el formato de la base de
 // datos; enrich() (opcional) completa datos que el listado no trae, como los códigos de barras.
-const READERS = { mercadona, consum };
+const READERS = { mercadona, consum, eci };
 // Por debajo de esto, una pasada se considera rota y no machaca el catálogo bueno
-const MIN_PRODUCTS = { mercadona: 500, consum: 1000 };
+const MIN_PRODUCTS = { mercadona: 500, consum: 1000, eci: 1000 };
 
 const running = new Map();
 
@@ -103,15 +104,33 @@ function saveCatalog(store, categories, rows, now) {
   return { added, priceChanges, removed };
 }
 
-/** Programa una pasada diaria a la hora indicada (hora de Madrid) y otra al arrancar si algún catálogo está viejo. */
+/**
+ * Programa una pasada diaria a la hora indicada (hora de Madrid) y, al arrancar,
+ * solo los catálogos nuevos o viejos. Así un redeploy con un súper nuevo (por
+ * ejemplo El Corte Inglés) lo descarga sin repetir Mercadona y Consum.
+ * FORCE_SCRAPE=1 fuerza todos los súpers en el arranque.
+ */
 export function scheduleScraping({ hour = Number(process.env.SCRAPE_HOUR ?? 6), maxAgeHours = 20 } = {}) {
-  const run = () => scrapeAll().catch((e) => console.error('[scraper] Error:', e.message));
+  const runAll = () => scrapeAll().catch((e) => console.error('[scraper] Error:', e.message));
 
-  const stale = STORES.some((s) => {
-    const last = getMeta(metaKey(s.id, 'catalog_updated_at'));
-    return !last || Date.now() - Date.parse(last) > maxAgeHours * 3600_000;
-  });
-  if (stale) setTimeout(run, 2000);
+  const stale = process.env.FORCE_SCRAPE === '1'
+    ? [...STORES]
+    : STORES.filter((s) => {
+      const last = getMeta(metaKey(s.id, 'catalog_updated_at'));
+      return !last || Date.now() - Date.parse(last) > maxAgeHours * 3600_000;
+    });
+  if (stale.length) {
+    console.log(`[scraper] Catálogos pendientes: ${stale.map((s) => s.name).join(', ')}. Se actualizan ahora.`);
+    setTimeout(async () => {
+      for (const s of stale) {
+        try {
+          await scrapeCatalog(s.id);
+        } catch (e) {
+          console.error(`[scraper] ${s.name}: ${e.message}`);
+        }
+      }
+    }, 2000);
+  }
 
   const scheduleNext = () => {
     const now = new Date();
@@ -122,7 +141,7 @@ export function scheduleScraping({ hour = Number(process.env.SCRAPE_HOUR ?? 6), 
     if (next <= madridNow) next.setDate(next.getDate() + 1);
     const wait = next.getTime() + offset - now.getTime();
     console.log(`[scraper] Próxima actualización: ${new Date(now.getTime() + wait).toISOString()}`);
-    setTimeout(async () => { await run(); scheduleNext(); }, wait);
+    setTimeout(async () => { await runAll(); scheduleNext(); }, wait);
   };
   scheduleNext();
 }

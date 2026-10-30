@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { db, getMeta } from './db.js';
 import { getCatalog, getPriceHistory } from './catalog.js';
 import { isScraping, scheduleScraping, scrapeAll, scrapeCatalog } from './scraper.js';
-import { cheaperElsewhere, compareProduct } from './compare.js';
+import { basketCost, cheaperElsewhere, compareProduct } from './compare.js';
 import { isStore, metaKey, storeParam, STORES } from './stores.js';
 import { createPlan, getPlan, plannerOptions, PlannerError, swapRecipe } from './planner.js';
 import {
@@ -73,6 +73,17 @@ app.get('/api/products/:id/compare', (req, res) => {
 app.post('/api/compare', (req, res) => {
   const ids = Array.isArray(req.body?.ids) ? req.body.ids.filter((x) => typeof x === 'string').slice(0, 300) : [];
   res.json(cheaperElsewhere(ids));
+});
+
+// Coste aproximado de la cesta en cada súper, con la cobertura de productos emparejados.
+app.post('/api/basket/compare', (req, res) => {
+  const items = Array.isArray(req.body?.items)
+    ? req.body.items
+      .filter((x) => x && typeof x.id === 'string' && Number.isFinite(Number(x.qty)) && Number(x.qty) > 0)
+      .slice(0, 300)
+      .map((x) => ({ id: x.id, qty: Number(x.qty) }))
+    : [];
+  res.json(basketCost(items));
 });
 
 app.get('/api/products/:id/history', (req, res) => {

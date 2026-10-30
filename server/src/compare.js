@@ -9,7 +9,7 @@ import { sectionIdFor } from './taxonomy.js';
 
 const STOP = new Set(['de', 'del', 'la', 'el', 'los', 'las', 'con', 'sin', 'y', 'e', 'en', 'para', 'al', 'a', 'o', 'u', 'un', 'una', 'x', 'pack', 'bandeja', 'bolsa', 'brik', 'botella', 'lata', 'tarro', 'bote', 'paquete', 'caja', 'malla', 'pieza', 'granel', 'unidad', 'ud', 'uds', 'g', 'gr', 'kg', 'ml', 'cl', 'l', 'lt']);
 // Marcas propias: no dicen qué es el producto y nunca coinciden entre súper
-const OWN_BRANDS = ['hacendado', 'deliplus', 'bosque verde', 'compy', 'consum', 'kyrell', 'casa juncal'];
+const OWN_BRANDS = ['hacendado', 'deliplus', 'bosque verde', 'compy', 'consum', 'kyrell', 'casa juncal', 'el corte ingles', 'hipercor'];
 const MIN_SIMILAR = 0.5;
 
 const fold = (s) => String(s ?? '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
@@ -180,4 +180,57 @@ export function cheaperElsewhere(ids) {
     if (best) out[id] = best;
   }
   return out;
+}
+
+/**
+ * Coste aproximado de una cesta en cada súper.
+ * Para cada línea se queda con el mismo producto (EAN) o el equivalente más parecido.
+ * No es una compra real: los formatos y las marcas propias pueden cambiar el total.
+ */
+export function basketCost(items) {
+  const idx = build();
+  const rows = new Map(STORES.map((s) => [s.id, { id: s.id, name: s.name, hue: s.hue, total: 0, matched: 0, exact: 0, similar: 0, missing: [] }]));
+  const totalItems = items.length;
+
+  for (const line of items) {
+    const it = idx.byId.get(String(line.id));
+    if (!it) continue;
+    const qty = Math.max(1, Math.min(99, Number(line.qty) || 1));
+    const found = compareProduct(it.id);
+    const byStore = new Map((found?.matches ?? []).map((m) => [m.store, m]));
+
+    for (const store of STORES) {
+      const row = rows.get(store.id);
+      if (!row || !idx.byStore.get(store.id)?.items.length) continue;
+      if (store.id === it.store) {
+        row.total += it.price * qty;
+        row.matched++;
+        row.exact++;
+        continue;
+      }
+      const m = byStore.get(store.id);
+      const match = m ? idx.byId.get(m.product.id) : null;
+      if (!match) {
+        row.missing.push(it.name);
+        continue;
+      }
+      row.total += match.price * qty;
+      row.matched++;
+      if (m.match === 'same') row.exact++;
+      else row.similar++;
+    }
+  }
+
+  return {
+    totalItems,
+    stores: [...rows.values()]
+      .filter((r) => idx.byStore.get(r.id)?.items.length)
+      .map((r) => ({
+        ...r,
+        total: Math.round(r.total * 100) / 100,
+        coverage: totalItems ? Math.round((r.matched / totalItems) * 100) : 0,
+        missing: r.missing.slice(0, 12),
+        missingCount: r.missing.length,
+      })),
+  };
 }

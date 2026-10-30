@@ -7,9 +7,9 @@ import {
   basketLines, checkoutLines, clearBasket, deleteBasket, dropMissing, finishShop, isShared, missingIds, moveToStore, purchaseShares, reuseBasket, storeInfo, storeOf,
   toast, toggleInCart, useStore,
 } from '../store';
-import type { Cheaper, Product, SplitMode } from '../types';
+import type { BasketCost, Cheaper, Product, SplitMode } from '../types';
 import { PillBar } from '../components/Pills';
-import { StoreName, Thumb } from '../components/Stores';
+import { StoreDot, StoreName, Thumb } from '../components/Stores';
 import { Price, ProductImage, QtyControl } from '../components/ProductTag';
 import { Empty } from '../components/Chrome';
 import { Avatar, SharePill, ShareSheet, Sheet } from '../components/Share';
@@ -74,6 +74,20 @@ export function Basket({ onOpen, join }: { onOpen: (p: Product) => void; join?: 
   const total = lines.reduce((a, l) => a + l.p.price * l.qty, 0);
   const shownTotal = useTweened(total);
   const doneCount = lines.filter((l) => inCart.includes(l.p.id)).length;
+
+  // Coste aproximado de la misma cesta en los demás súper
+  const [basketCost, setBasketCost] = useState<BasketCost | null>(null);
+  const basketKey = lines.map((l) => `${l.p.id}:${l.qty}`).join(',');
+  useEffect(() => {
+    if (!basketKey) { setBasketCost(null); return; }
+    let alive = true;
+    const t = setTimeout(() => {
+      api.basketCost(lines.map((l) => ({ id: l.p.id, qty: l.qty })))
+        .then((c) => { if (alive) setBasketCost(c); })
+        .catch(() => {});
+    }, 500);
+    return () => { alive = false; clearTimeout(t); };
+  }, [basketKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   let changed = 0, delta = 0;
   for (const l of lines) {
@@ -177,6 +191,39 @@ export function Basket({ onOpen, join }: { onOpen: (p: Product) => void; join?: 
               )}
               <p className="muted small" style={{ marginTop: 8 }}>«Parecido» compara por precio por kilo o litro. Al mover, la cantidad se mantiene.</p>
             </div>
+          )}
+          {basketCost && basketCost.stores.length > 1 && (
+            <section className="panel basket-cost" aria-label="Coste aproximado en otros súper">
+              <div className="basket-cost-head">
+                <h2>Coste en otros súper</h2>
+                <span className="muted small">Aproximado</span>
+              </div>
+              {basketCost.stores.filter((s) => s.id !== tab).map((s) => {
+                const diff = s.total - total;
+                return (
+                  <div className="basket-cost-row" key={s.id}>
+                    <StoreDot id={s.id} size={26} />
+                    <div className="info">
+                      <b>{s.name}</b>
+                      <span className="muted small num">{s.matched} de {basketCost.totalItems} productos · {s.coverage}%</span>
+                      <span className="muted small">
+                        {s.similar > 0 ? `${s.similar} parecido${s.similar > 1 ? 's' : ''}` : 'Mismos productos'}
+                        {s.missingCount > 0 ? ` · faltan ${s.missingCount}` : ''}
+                      </span>
+                    </div>
+                    <div className="right num">
+                      <b>{money(s.total)}</b>
+                      <span className={diff <= 0 ? 'saving' : 'muted small'}>
+                        {diff <= 0 ? '−' : '+'}{money(Math.abs(diff))}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+              <p className="muted small" style={{ marginTop: 8 }}>
+                Mismos productos o equivalentes. No incluye ofertas ni cambios de formato.
+              </p>
+            </section>
           )}
           {missing.length > 0 && (
             <div className="notice up">

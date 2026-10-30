@@ -243,6 +243,24 @@ export interface Comparison {
 
 export type Cheaper = Record<string, StoreMatch & { saving: number }>;
 
+export interface BasketStoreCost {
+  id: string;
+  name: string;
+  hue: string;
+  total: number;
+  matched: number;
+  exact: number;
+  similar: number;
+  missing: string[];
+  missingCount: number;
+  coverage: number;
+}
+
+export interface BasketCost {
+  totalItems: number;
+  stores: BasketStoreCost[];
+}
+
 // ───────────── Cuentas ─────────────
 
 export interface User {
